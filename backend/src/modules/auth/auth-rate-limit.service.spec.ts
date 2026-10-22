@@ -1,37 +1,47 @@
 import { HttpException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { RedisService } from '../health/redis.service';
+import { DataSource } from 'typeorm';
 import { AuthRateLimitService } from './auth-rate-limit.service';
 
 describe('AuthRateLimitService', () => {
   let service: AuthRateLimitService;
-  let consumeRateLimit: jest.Mock;
+  let query: jest.Mock;
 
   beforeEach(() => {
-    consumeRateLimit = jest.fn().mockResolvedValue(1);
-    const redis = { consumeRateLimit } as unknown as RedisService;
+    query = jest.fn().mockResolvedValue([{ request_count: 1 }]);
+    const dataSource = { query } as unknown as DataSource;
     const config = {
       get: jest.fn((key: string, fallback: number) =>
         key === 'AUTH_LOGIN_LIMIT' ? 2 : fallback,
       ),
     } as unknown as ConfigService;
-    service = new AuthRateLimitService(redis, config);
+    service = new AuthRateLimitService(dataSource, config);
   });
 
-  it('hashes account identifiers before using them as Redis keys', async () => {
+  it('hashes account identifiers before storing them in PostgreSQL', async () => {
     await service.assertLoginAllowed('login:identifier', '+923001234567');
 
-    expect(consumeRateLimit).toHaveBeenCalledWith(
-      expect.stringMatching(/^rate:login:identifier:[a-f0-9]{64}$/),
-      60,
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO auth_rate_limits'),
+      ['login:identifier', expect.stringMatching(/^[a-f0-9]{64}$/), 60],
     );
   });
 
   it('rejects requests above the configured threshold', async () => {
-    consumeRateLimit.mockResolvedValue(3);
+    query.mockResolvedValue([{ request_count: 3 }]);
 
     await expect(
       service.assertLoginAllowed('login:ip', '127.0.0.1'),
     ).rejects.toBeInstanceOf(HttpException);
+  });
+
+  it('reuses the fixed window until its expiry', async () => {
+    await service.assertRegistrationAllowed('127.0.0.1');
+
+    const [sql, parameters] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('auth_rate_limits.expires_at <= now()');
+    expect(sql).toContain('ELSE auth_rate_limits.expires_at');
+    expect(parameters[0]).toBe('register:ip');
+    expect(parameters[2]).toBe(60);
   });
 });

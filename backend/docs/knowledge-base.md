@@ -22,13 +22,14 @@ payments, realtime dispatch, and production operations remain incomplete.
   business/operations and technical views and an English/Roman Urdu toggle.
 - **Persistence:** PostgreSQL 16 with PostGIS; TypeORM configured with schema
   synchronization disabled. Use versioned migrations for every schema change.
-- **Ephemeral state:** Redis 7 with password authentication.
+- **Rate limiting:** atomic, expiring authentication counters stored in
+  PostgreSQL; Redis is not required.
 - **Validation and security:** class-validator/class-transformer `ValidationPipe`
   (whitelist, reject unknown fields, transform); Helmet; explicit CORS origins.
 - **Logging:** Pino HTTP request logging; authorization, cookie, password, OTP,
   code, trip PIN, and refresh-token fields are redacted.
-- **Local infrastructure:** Docker Compose publishes PostgreSQL/Redis only on
-  loopback and persists their data in named volumes.
+- **Local infrastructure:** PostgreSQL/PostGIS can run locally or through the
+  optional Docker Compose PostgreSQL service.
 - **Current routes:** health, auth, driver onboarding/review, pricing, matching,
   and ride lifecycle endpoints documented in [the API overview](api.md).
 - **Identity:** Argon2id password hashes; Pakistan mobile E.164 normalization;
@@ -37,9 +38,9 @@ payments, realtime dispatch, and production operations remain incomplete.
   restricted to passenger/driver roles. OTP challenges are hashed, expire, and
   track failed attempts. The development delivery adapter is opt-in and returns
   a code only in development; there is no production SMS adapter.
-- **Rate limiting:** Redis atomic increment/expiry limits login by client IP
-  and normalized account identifier and registration by client IP. Configure
-  trusted reverse-proxy hops accurately; Redis is required for these routes.
+- **Rate limiting:** PostgreSQL atomic upserts limit login by client IP and
+  normalized account identifier and registration by client IP. Counters use
+  fixed expiry windows and expired rows are cleaned in bounded batches.
 - **Schema:** identity/audit, driver/vehicle, ride/offer, and OTP challenge
   tables are introduced by versioned TypeORM migrations.
 - **Driver operations:** profile and vehicle document metadata, super-admin
@@ -64,10 +65,10 @@ payments, realtime dispatch, and production operations remain incomplete.
   SMS vendor behind the OTP provider boundary. These are product decisions;
   the production integrations are not yet implemented.
 
-The readiness route reports whether PostgreSQL and Redis respond. Liveness is
-intentionally independent of those services. The API currently opens the
-PostgreSQL connection during startup, so PostgreSQL must be available to start
-the complete Nest application.
+The readiness route reports whether PostgreSQL responds. Liveness is
+intentionally independent of the database. The API opens the PostgreSQL
+connection during startup, so PostgreSQL must be available to start the
+complete Nest application.
 
 ## Code organization
 
@@ -153,13 +154,13 @@ when meaningful, and document production setup and failure behavior.
 ## Configuration
 
 Copy `.env.example` to `.env` for local use. Application startup validates the
-environment. Required values include a database password and Redis URL. Keep
+environment. Required values include a database password. Keep
 secrets out of source, logs, issue reports, and client responses. Production
 configuration must use a managed secret store and unique credentials.
 
 `CORS_ORIGINS` is a comma-separated allowlist. An empty value disables
 cross-origin access; do not replace it with a wildcard for credentialed API
-calls. `REDIS_URL` must use an authenticated URL in shared environments.
+calls.
 
 ## Local development and checks
 
@@ -167,7 +168,8 @@ From `backend/`:
 
 ```powershell
 Copy-Item .env.example .env
-docker compose up -d
+# Optional if PostgreSQL is not already installed locally:
+docker compose up -d postgres
 npm ci
 npm run start:dev
 ```
@@ -185,16 +187,16 @@ npm run test:e2e
 
 The health-controller unit tests do not require Docker. The health endpoint
 and auth endpoint e2e tests use dependency doubles; they test HTTP wiring but
-do not replace database/Redis integration tests. Auth routes require migrated
-PostgreSQL, Redis, and a generated `JWT_ACCESS_SECRET` to run end-to-end locally.
+do not replace database integration tests. Auth routes require migrated
+PostgreSQL and a generated `JWT_ACCESS_SECRET` to run end-to-end locally.
 
 ## Planned phased build
 
-1. **Foundation (implemented):** configuration, containerized PostGIS/Redis,
+1. **Foundation (implemented):** configuration, PostgreSQL/PostGIS,
    request/HTTP security defaults, logging, Swagger, health routes.
 2. **Identity/security (partial):** users, identity migration, Argon2id
    password auth, role/status scaffolding, rotating/revocable sessions,
-   Redis-backed login/registration rate limits, and security audit events.
+   PostgreSQL-backed login/registration rate limits, and security audit events.
    Remaining: OTP provider and verification, account recovery/deletion,
    user-management/role administration, richer audit access controls, and
    database-backed auth integration/concurrency tests.

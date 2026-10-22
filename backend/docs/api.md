@@ -9,7 +9,7 @@ All application endpoints use the `/api/v1` prefix. Swagger UI is served at
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/v1/health/live` | Process liveness; no dependency checks. |
-| GET | `/api/v1/health/ready` | PostgreSQL and Redis readiness; returns 503 if either is unavailable. |
+| GET | `/api/v1/health/ready` | PostgreSQL readiness; returns 503 if the database is unavailable. |
 
 ## Authentication
 
@@ -32,9 +32,10 @@ OTP challenge and verification logic is implemented, but real SMS delivery is
 not. In local development, set `OTP_DEV_RETURN_CODE=true` to include the
 one-time code in the response. This setting is rejected in production.
 
-Login is rate limited in Redis by client IP and normalized account identifier;
-registration is rate limited by IP. Configure trusted proxy hops correctly
-behind a reverse proxy.
+Login is rate limited in PostgreSQL by client IP and normalized account
+identifier; registration is rate limited by IP. Expired counters are cleaned
+in bounded batches. Configure trusted proxy hops correctly behind a reverse
+proxy.
 
 ## Drivers
 

@@ -25,6 +25,8 @@ The identity migration creates:
 
 The current domain migrations also create:
 
+- `auth_rate_limits`: hashed authentication identifiers, atomic request counts,
+  and fixed-window expiries for login/registration abuse prevention.
 - `phone_otp_challenges`: one-time phone verification challenge hashes,
   expiration, consumption, and failed-attempt tracking.
 - `driver_profiles`: license metadata, approval state, online/available flags,

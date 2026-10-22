@@ -12,14 +12,14 @@ flows but is not a complete or production-ready ride-hailing service.
   technical views with English/Roman Urdu language toggle).
 - Swagger UI: `/api/docs`.
 - Liveness check: `GET /api/v1/health/live`.
-- Readiness check: `GET /api/v1/health/ready` (PostgreSQL and Redis).
-- PostgreSQL/PostGIS and password-protected Redis local containers.
+- Readiness check: `GET /api/v1/health/ready` (PostgreSQL).
+- PostgreSQL/PostGIS local container is optional if PostgreSQL is installed.
 - Environment validation, request validation, Helmet, explicit CORS origins,
   and structured Pino HTTP logging with sensitive fields redacted.
 - Passenger/driver signup, password login, access-token sessions, single-use
   refresh rotation, logout, logout-all, and current-account lookup.
 - Argon2id password hashes, Pakistan mobile normalization, role/status data,
-  hashed refresh-token storage, server-side session revocation, Redis-backed
+  hashed refresh-token storage, server-side session revocation, PostgreSQL-backed
   login/register rate limits, and security audit events.
 - Phone OTP challenge and verification endpoints, using a development-only
   code-return adapter (no SMS provider is configured).
@@ -29,23 +29,26 @@ flows but is not a complete or production-ready ride-hailing service.
   acceptance, and ride request/arrival/start/complete/cancel/history endpoints.
 - Authenticated Socket.IO ride rooms, offer notifications, lifecycle events,
   and private active-trip driver location events (single-instance only).
-- Versioned identity, driver/vehicle, ride/offer, OTP-challenge, and audit
-  schema migrations.
+- Versioned identity, driver/vehicle, ride/offer, OTP-challenge, audit, and
+  PostgreSQL rate-limit schema migrations.
 
 ## Requirements
 
 - Node.js 22 or newer (Node.js 24 LTS recommended).
 - npm.
-- Docker Desktop with Docker Compose for local PostgreSQL and Redis.
+- PostgreSQL 16 with PostGIS, installed locally or run with optional Docker
+  Compose.
 
 ## Run locally
 
-From this directory, create the local environment file and start dependencies:
+From this directory, create the local environment file. Docker Compose is
+optional if PostgreSQL is not already installed locally:
 
 ```powershell
 if (!(Test-Path .env)) { Copy-Item .env.example .env }
+# Optional if PostgreSQL is not already installed locally:
+docker compose up -d postgres
 # Add JWT_ACCESS_SECRET to .env with a fresh random value (see below).
-docker compose up -d
 npm ci
 npm run migration:run
 npm run start:dev
@@ -72,11 +75,10 @@ Invoke-RestMethod http://localhost:3000/api/v1/health/ready
 Open Swagger at <http://localhost:3000/api/docs>.
 Open the FairRide project handbook at <http://localhost:3000/knowledge-base>.
 
-`DATABASE_PASSWORD` and `REDIS_PASSWORD` in `.env` are local-only examples;
-replace them with unique values and never reuse them in shared or production
-environments. Do not commit `.env`.
-The app's readiness endpoint requires those Docker services, but the included
-unit and HTTP end-to-end tests use local doubles and can run without Docker.
+`DATABASE_PASSWORD` in `.env.example` is a local-only example; use unique
+credentials in shared or production environments. Do not commit `.env`.
+The readiness endpoint requires PostgreSQL only; the included unit and HTTP
+end-to-end tests use local doubles and can run without Docker.
 
 ## Development commands
 
@@ -112,6 +114,10 @@ npm run admin:bootstrap
 Do not use those example values in a real environment. The command refuses to
 elevate or overwrite an existing account.
 
+Authentication rate limits are stored in PostgreSQL. Run the
+`CreateAuthRateLimits` migration with the other database migrations; Redis is
+not required.
+
 ## Documentation
 
 - [Knowledge base](docs/knowledge-base.md): architecture decisions, current
@@ -129,11 +135,11 @@ elevate or overwrite an existing account.
 ## Important limitations
 
 There is no real SMS provider, document storage/identity-verification service,
-continuous rematching worker, Redis Socket.IO scale-out, online payment or
+continuous rematching worker, multi-instance Socket.IO scale-out, online payment or
 payout ledger, ratings, safety/support workflow, or admin console. In
 development, set `OTP_DEV_RETURN_CODE=true` to include the code in the OTP
 response. This flag is rejected in production. The development routing provider
 is a marked straight-line approximation; production startup requires
 `ROUTING_PROVIDER=osrm` and `ROUTING_BASE_URL`. Integrate and validate real
 providers before enabling the service for riders. Starting the application and
-passing readiness checks requires PostgreSQL and Redis.
+passing readiness checks requires PostgreSQL.

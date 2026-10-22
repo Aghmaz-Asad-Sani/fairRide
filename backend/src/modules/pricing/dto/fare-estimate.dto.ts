@@ -1,10 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsEnum,
-  IsLatitude,
-  IsLongitude,
-  IsOptional,
-} from 'class-validator';
+import { IsEnum, IsLatitude, IsLongitude, IsOptional } from 'class-validator';
 import { VehicleCategory, VehicleType } from '../../drivers/vehicle.entity';
 
 export class FareEstimateDto {

@@ -111,11 +111,11 @@ const knowledgeBasePage = String.raw`<!doctype html>
     <table><tbody>
       <tr><td>Backend</td><td>NestJS 11, TypeScript, Node.js 22+, REST API at <code>/api/v1</code>.</td></tr>
       <tr><td>Database</td><td>PostgreSQL with PostGIS, TypeORM entities and versioned migrations; schema synchronization is disabled.</td></tr>
-      <tr><td>Cache / rate limits</td><td>Redis with password authentication; Redis-backed authentication rate limits.</td></tr>
+      <tr><td>Rate limits</td><td>Atomic expiring authentication counters stored in PostgreSQL; no Redis dependency.</td></tr>
       <tr><td>Security</td><td>Argon2id password hashes, JWT access tokens tied to server-side sessions, hashed rotating refresh tokens, DTO validation, role/ownership checks, Helmet and redacted structured logs.</td></tr>
       <tr><td>Spatial matching</td><td>Bounded PostGIS distance query, freshness checks, eligibility filters and expiring offers.</td></tr>
       <tr><td>Fare</td><td>PKR is represented as integer paisa. Routing-derived distance/time are trusted server-side inputs.</td></tr>
-      <tr><td>API docs &amp; health</td><td><a href="/api/docs">Swagger UI</a>; liveness and dependency readiness endpoints.</td></tr>
+      <tr><td>API docs &amp; health</td><td><a href="/api/docs">Swagger UI</a>; liveness and PostgreSQL readiness endpoints.</td></tr>
       <tr><td>Realtime</td><td>Socket.IO namespace <code>/realtime</code>; authenticated sessions, participant-only rooms, offer/status events and active-trip location are implemented. Multi-server adapter, event replay and mobile reconnect/resync remain.</td></tr>
     </tbody></table>
     <h3>Trip state</h3><p><code>SEARCHING → ACCEPTED → DRIVER_ARRIVING → IN_PROGRESS → COMPLETED</code>; pre-trip states can be cancelled; requests/offers can expire. Server/database state is authoritative, not client socket messages.</p>

@@ -26,7 +26,6 @@ import { KnowledgeBaseModule } from './modules/knowledge-base/knowledge-base.mod
         DATABASE_USER: Joi.string().default('fairride'),
         DATABASE_PASSWORD: Joi.string().min(1).required(),
         DATABASE_NAME: Joi.string().default('fairride'),
-        REDIS_URL: Joi.string().uri().required(),
         JWT_ACCESS_SECRET: Joi.string()
           .min(32)
           .invalid('replace_with_a_random_secret_at_least_32_characters')

@@ -5,7 +5,6 @@ import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuditLog } from '../../database/audit-log.entity';
 import { RolesGuard } from '../../common/roles.guard';
-import { HealthModule } from '../health/health.module';
 import { AuthController } from './auth.controller';
 import { AuthRateLimitService } from './auth-rate-limit.service';
 import { AuthSession } from './auth-session.entity';
@@ -22,7 +21,6 @@ import {
   imports: [
     TypeOrmModule.forFeature([User, AuthSession, AuditLog, PhoneOtpChallenge]),
     PassportModule,
-    HealthModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({

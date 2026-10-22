@@ -4,7 +4,6 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { DataSource } from 'typeorm';
 import { HealthController } from '../src/modules/health/health.controller';
-import { RedisService } from '../src/modules/health/redis.service';
 
 describe('Health endpoints (e2e)', () => {
   let app: INestApplication;
@@ -16,10 +15,6 @@ describe('Health endpoints (e2e)', () => {
         {
           provide: DataSource,
           useValue: { query: jest.fn().mockResolvedValue([{ '?column?': 1 }]) },
-        },
-        {
-          provide: RedisService,
-          useValue: { ping: jest.fn().mockResolvedValue('PONG') },
         },
       ],
     }).compile();
@@ -40,13 +35,10 @@ describe('Health endpoints (e2e)', () => {
       .expect({ status: 'ok' });
   });
 
-  it('reports database and Redis readiness', async () => {
+  it('reports database readiness', async () => {
     await request(app.getHttpServer() as App)
       .get('/api/v1/health/ready')
       .expect(200)
-      .expect({
-        status: 'ok',
-        checks: { database: 'ok', redis: 'ok' },
-      });
+      .expect({ status: 'ok', checks: { database: 'ok' } });
   });
 });

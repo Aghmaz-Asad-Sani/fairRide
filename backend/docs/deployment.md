@@ -7,8 +7,8 @@ production ready.
 
 - [ ] Implement and test required application phases and database migrations.
 - [ ] Use supported Node.js LTS and a reviewed, locked dependency tree.
-- [ ] Provide database and Redis through private networking with TLS and
-  dedicated credentials.
+- [ ] Provide PostgreSQL through private networking with TLS and dedicated
+  credentials.
 - [ ] Configure secrets through a managed secret store; rotate credentials.
 - [ ] Set exact `CORS_ORIGINS`, `NODE_ENV=production`, and an appropriate
   `LOG_LEVEL`; do not expose `.env`.
@@ -24,6 +24,8 @@ production ready.
   authorization, reconnect/resync, origin allowlists and load limits.
 - [ ] Establish request/operation rate limits, timeouts, bounded retries, and
   alerting.
+- [ ] Apply the `CreateAuthRateLimits` migration. Authentication rate limits
+  are stored atomically in PostgreSQL; Redis is not required.
 - [ ] Run migrations as a controlled deployment step; keep TypeORM
   synchronization disabled.
 - [ ] Apply migration `AddVehicleTypeAndFourKmMatching` before deploying
