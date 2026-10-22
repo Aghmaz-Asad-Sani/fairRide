@@ -22,6 +22,13 @@ const config = {
     "expo-router",
     "expo-font",
     [
+      "expo-location",
+      {
+        locationWhenInUsePermission:
+          "FairRide uses your location to set ride pickup points and match nearby drivers.",
+      },
+    ],
+    [
       "expo-build-properties",
       {
         android: {

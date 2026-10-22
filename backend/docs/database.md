@@ -2,8 +2,10 @@
 
 ## Local PostgreSQL
 
-Docker Compose starts PostgreSQL 16 with PostGIS 3.4, initializes the
-`postgis` extension, and persists data in the `postgres_data` volume. The
+FairRide requires PostgreSQL with the PostGIS extension available. The driver
+and ride schema migration enables `postgis`; the extension package must first
+be installed for your PostgreSQL version. Docker Compose uses PostgreSQL 16
+with PostGIS 3.4 and persists data in the `postgres_data` volume. The
 container port is bound to `127.0.0.1` only. Connection settings are in `.env`.
 
 ## Schema management

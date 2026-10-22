@@ -58,6 +58,7 @@ export interface Ride {
   estimatedDistanceMeters: number;
   estimatedDurationSeconds: number;
   estimatedFarePaisa: number;
+  finalFarePaisa: number | null;
   currency: string;
   pickupPin?: string;
 }
@@ -89,6 +90,8 @@ export interface DriverProfile {
   licenseNumber: string;
   licenseExpiry: string;
   identityVerified: boolean;
+  isOnline: boolean;
+  isAvailable: boolean;
   vehicles: Vehicle[];
 }
 
@@ -100,6 +103,8 @@ export interface Vehicle {
   model: string;
   modelYear: number;
   registrationNumber: string;
+  chassisNumber: string | null;
+  engineNumber: string | null;
   color: string;
   passengerCapacity: number;
   documentExpiresAt: string;

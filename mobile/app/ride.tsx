@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { router } from "expo-router";
+import * as Location from "expo-location";
 import {
   Animated,
   Easing,
@@ -13,9 +14,11 @@ import {
 } from "react-native";
 import {
   apiPost,
+  apiGet,
   ApiError,
   CreatedRide,
   FareEstimate,
+  Ride,
 } from "../src/api/client";
 import { useSession } from "../src/auth/SessionProvider";
 import {
@@ -45,6 +48,11 @@ interface RideInput {
   vehicleType: VehicleType;
 }
 
+interface RideHistoryItem {
+  id: string;
+  status: string;
+}
+
 const categories: VehicleCategory[] = ["ECONOMY", "COMFORT", "XL"];
 const vehicleTypes: {
   type: VehicleType;
@@ -58,6 +66,9 @@ const vehicleTypes: {
 ];
 
 function coordinates(latitude: string, longitude: string) {
+  if (!latitude.trim() || !longitude.trim()) {
+    throw new Error("Set your pickup GPS and search for a destination.");
+  }
   const lat = Number(latitude);
   const lon = Number(longitude);
   if (
@@ -75,19 +86,22 @@ function coordinates(latitude: string, longitude: string) {
 
 export default function RideScreen() {
   const { user, isLoading } = useSession();
-  const [pickupLabel, setPickupLabel] = useState("Karachi pickup");
-  const [pickupLatitude, setPickupLatitude] = useState("24.8607");
-  const [pickupLongitude, setPickupLongitude] = useState("67.0011");
-  const [destinationLabel, setDestinationLabel] = useState(
-    "Karachi destination",
-  );
-  const [destinationLatitude, setDestinationLatitude] = useState("24.8733");
-  const [destinationLongitude, setDestinationLongitude] = useState("67.0290");
+  const [pickupLabel, setPickupLabel] = useState("");
+  const [pickupLatitude, setPickupLatitude] = useState("");
+  const [pickupLongitude, setPickupLongitude] = useState("");
+  const [destinationLabel, setDestinationLabel] = useState("");
+  const [destinationLatitude, setDestinationLatitude] = useState("");
+  const [destinationLongitude, setDestinationLongitude] = useState("");
   const [category, setCategory] = useState<VehicleCategory>("ECONOMY");
   const [vehicleType, setVehicleType] = useState<VehicleType>("CAR");
   const [estimate, setEstimate] = useState<FareEstimate | null>(null);
   const [created, setCreated] = useState<CreatedRide | null>(null);
-  const [busy, setBusy] = useState<"estimate" | "ride" | null>(null);
+  const [activeRide, setActiveRide] = useState<Ride | null>(null);
+  const [showRideModal, setShowRideModal] = useState(false);
+  const [rideActionBusy, setRideActionBusy] = useState(false);
+  const [busy, setBusy] = useState<
+    "destination" | "estimate" | "ride" | null
+  >(null);
   const [error, setError] = useState("");
   const [matchingPulse] = useState(() => new Animated.Value(0));
 
@@ -122,6 +136,67 @@ export default function RideScreen() {
     return () => animation.stop();
   }, [busy, matchingPulse]);
 
+  useEffect(() => {
+    if (
+      isLoading ||
+      user?.role !== "PASSENGER" ||
+      activeRide
+    ) {
+      return;
+    }
+    let cancelled = false;
+    void apiGet<{ items: RideHistoryItem[] }>("/rides?page=1&limit=20")
+      .then(async (history) => {
+        const ride = history.items.find((item) =>
+          ["SEARCHING", "ACCEPTED", "DRIVER_ARRIVING", "IN_PROGRESS"].includes(
+            item.status,
+          ),
+        );
+        if (!ride || cancelled) return;
+        const details = await apiGet<Ride>(`/rides/${ride.id}`);
+        if (!cancelled) setActiveRide(details);
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) {
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : "Could not load your current ride.",
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRide, isLoading, user]);
+
+  useEffect(() => {
+    const rideId = activeRide?.id;
+    if (
+      !rideId ||
+      ["COMPLETED", "CANCELLED", "EXPIRED"].includes(activeRide.status)
+    ) {
+      return;
+    }
+    const timer = setInterval(() => {
+      void apiGet<Ride>(`/rides/${rideId}`)
+        .then((ride) => {
+          setActiveRide((current) => (current?.id === rideId ? ride : current));
+          setCreated((current) =>
+            current?.ride.id === rideId ? { ...current, ride } : current,
+          );
+        })
+        .catch((cause: unknown) => {
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : "Could not refresh the ride status.",
+          );
+        });
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [activeRide?.id, activeRide?.status]);
+
   if (isLoading || !user || !user.phoneVerified || user.role !== "PASSENGER") {
     return <LoadingView />;
   }
@@ -132,6 +207,7 @@ export default function RideScreen() {
     if (!pickupLabel.trim() || !destinationLabel.trim()) {
       throw new Error("Enter a label for both pickup and destination.");
     }
+
     return {
       pickupLatitude: pickup.latitude,
       pickupLongitude: pickup.longitude,
@@ -142,6 +218,71 @@ export default function RideScreen() {
       vehicleCategory: vehicleType === "CAR" ? category : "ECONOMY",
       vehicleType,
     };
+  }
+
+  async function useCurrentPickup() {
+    setError("");
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== "granted") {
+        throw new Error("Allow location access to set your pickup point.");
+      }
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      const { latitude, longitude } = location.coords;
+      setPickupLatitude(String(latitude));
+      setPickupLongitude(String(longitude));
+      setEstimate(null);
+      setPickupLabel(`${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+      const places = await Location.reverseGeocodeAsync({ latitude, longitude });
+      const place = places[0];
+      const label = [
+        place?.name,
+        place?.street,
+        place?.district,
+        place?.city,
+      ]
+        .filter(Boolean)
+        .filter((value, index, items) => items.indexOf(value) === index)
+        .join(", ");
+      if (label) setPickupLabel(label);
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not get your current location.",
+      );
+    }
+  }
+
+  async function findDestination() {
+    setError("");
+    if (!destinationLabel.trim()) {
+      setError("Enter a destination place or address first.");
+      return;
+    }
+    setBusy("destination");
+    try {
+      const results = await Location.geocodeAsync(destinationLabel.trim());
+      const match = results[0];
+      if (!match) {
+        throw new Error("No destination matched that place or address.");
+      }
+      setDestinationLatitude(String(match.latitude));
+      setDestinationLongitude(String(match.longitude));
+      setEstimate(null);
+    } catch (cause) {
+      setDestinationLatitude("");
+      setDestinationLongitude("");
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not find that destination.",
+      );
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function requestEstimate() {
@@ -175,6 +316,7 @@ export default function RideScreen() {
     setError("");
     setCreated(null);
     setBusy("ride");
+    setShowRideModal(false);
     try {
       const input = getInput();
       const idempotencyKey = `mobile-${Date.now()}-${Math.random()
@@ -184,6 +326,8 @@ export default function RideScreen() {
         headers: { "Idempotency-Key": idempotencyKey },
       });
       setCreated(result);
+      setActiveRide(result.ride);
+      setShowRideModal(true);
     } catch (cause) {
       setError(
         cause instanceof ApiError || cause instanceof Error
@@ -195,14 +339,32 @@ export default function RideScreen() {
     }
   }
 
+  async function cancelRide() {
+    if (!activeRide) return;
+    setRideActionBusy(true);
+    setError("");
+    try {
+      await apiPost(`/rides/${activeRide.id}/cancel`, { reason: "CHANGED_MIND" });
+      const updated = await apiGet<Ride>(`/rides/${activeRide.id}`);
+      setActiveRide(updated);
+      setCreated((current) =>
+        current?.ride.id === updated.id ? { ...current, ride: updated } : current,
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not cancel this ride.");
+    } finally {
+      setRideActionBusy(false);
+    }
+  }
+
   return (
     <Screen>
       <Modal
         animationType="fade"
         transparent
-        visible={busy === "ride" || created !== null}
+        visible={busy === "ride" || (created !== null && showRideModal)}
         onRequestClose={() => {
-          if (busy !== "ride") setCreated(null);
+          if (busy !== "ride") setShowRideModal(false);
         }}
       >
         <View style={styles.modalScrim}>
@@ -286,10 +448,9 @@ export default function RideScreen() {
                 <Text style={styles.matchEyebrow}>REQUEST SENT</Text>
                 <Text style={styles.matchTitle}>Request sent to drivers</Text>
                 <Text style={styles.matchBody}>
-                  Your request has been shared with {created?.offersCreated}{" "}
-                  nearby driver
-                  {created?.offersCreated === 1 ? "" : "s"}. Driver acceptance
-                  and live tracking are not shown in this preview yet.
+                  {created?.ride.status === "SEARCHING"
+                    ? `Shared with ${created?.offersCreated} nearby driver${created?.offersCreated === 1 ? "" : "s"}. Waiting for a driver to accept.`
+                    : `Ride status: ${created?.ride.status.replaceAll("_", " ").toLowerCase()}.`}
                 </Text>
                 <RouteSummary
                   pickup={pickupLabel}
@@ -304,7 +465,7 @@ export default function RideScreen() {
                 </View>
                 <Button
                   title="Done"
-                  onPress={() => setCreated(null)}
+                  onPress={() => setShowRideModal(false)}
                   style={styles.modalButton}
                 />
               </>
@@ -321,6 +482,32 @@ export default function RideScreen() {
           subtitle="Choose a vehicle and route. We’ll look for approved drivers within 4 km."
         />
         {error ? <Notice message={error} error /> : null}
+        {activeRide ? (
+          <Card>
+            <Text style={uiStyles.sectionTitle}>
+              Current ride · {activeRide.status.replaceAll("_", " ")}
+            </Text>
+            <Text style={[uiStyles.body, { marginTop: 6 }]}>
+              {activeRide.pickup.label} → {activeRide.destination.label}
+            </Text>
+            {activeRide.pickupPin ? (
+              <Text style={[uiStyles.body, { marginTop: 6 }]}>
+                Give your driver this pickup PIN: {activeRide.pickupPin}
+              </Text>
+            ) : null}
+            {["SEARCHING", "ACCEPTED", "DRIVER_ARRIVING"].includes(
+              activeRide.status,
+            ) ? (
+              <Button
+                title="Cancel ride"
+                secondary
+                onPress={cancelRide}
+                busy={rideActionBusy}
+                style={{ marginTop: 12 }}
+              />
+            ) : null}
+          </Card>
+        ) : null}
         <Card>
           <View style={styles.routeTimeline}>
             <View style={styles.timelineMarkers}>
@@ -348,6 +535,8 @@ export default function RideScreen() {
                 value={destinationLabel}
                 onChangeText={(value) => {
                   setDestinationLabel(value);
+                  setDestinationLatitude("");
+                  setDestinationLongitude("");
                   setEstimate(null);
                 }}
               />
@@ -355,57 +544,41 @@ export default function RideScreen() {
           </View>
           <View style={styles.locationNote}>
             <Text style={styles.locationNoteText}>
-              Location pins are currently entered as coordinates below.
+              Use GPS for pickup, then search for your destination.
             </Text>
           </View>
+          <Button
+            title="Use my current location for pickup"
+            secondary
+            onPress={useCurrentPickup}
+            style={{ marginBottom: 12 }}
+          />
           <View style={uiStyles.row}>
             <View style={{ flex: 1 }}>
-              <Field
-                label="Latitude"
-                keyboardType="decimal-pad"
-                value={pickupLatitude}
-                onChangeText={(value) => {
-                  setPickupLatitude(value);
-                  setEstimate(null);
-                }}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Field
-                label="Longitude"
-                keyboardType="decimal-pad"
-                value={pickupLongitude}
-                onChangeText={(value) => {
-                  setPickupLongitude(value);
-                  setEstimate(null);
-                }}
-              />
+              <Text style={[uiStyles.small, { marginBottom: 12 }]}>
+                {pickupLatitude && pickupLongitude
+                  ? `Pickup GPS: ${Number(pickupLatitude).toFixed(5)}, ${Number(pickupLongitude).toFixed(5)}`
+                  : "Pickup location not set"}
+              </Text>
             </View>
           </View>
-          <View style={uiStyles.row}>
-            <View style={{ flex: 1 }}>
-              <Field
-                label="Latitude"
-                keyboardType="decimal-pad"
-                value={destinationLatitude}
-                onChangeText={(value) => {
-                  setDestinationLatitude(value);
-                  setEstimate(null);
-                }}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Field
-                label="Longitude"
-                keyboardType="decimal-pad"
-                value={destinationLongitude}
-                onChangeText={(value) => {
-                  setDestinationLongitude(value);
-                  setEstimate(null);
-                }}
-              />
-            </View>
-          </View>
+          <Button
+            title={
+              destinationLatitude
+                ? "Destination found · search again"
+                : "Find destination by place or address"
+            }
+            secondary
+            onPress={findDestination}
+            busy={busy === "destination"}
+            disabled={busy !== null}
+          />
+          {destinationLatitude && destinationLongitude ? (
+            <Text style={[uiStyles.small, { marginBottom: 14 }]}>
+              Destination pin: {Number(destinationLatitude).toFixed(5)},{" "}
+              {Number(destinationLongitude).toFixed(5)}
+            </Text>
+          ) : null}
           <Text style={[uiStyles.sectionTitle, { marginBottom: 9 }]}>
             Choose a vehicle
           </Text>
@@ -535,8 +708,8 @@ export default function RideScreen() {
         />
         <Text style={[uiStyles.small, { color: colors.muted }]}>
           Routing may use a development approximation until a production OSRM
-          service is configured. Coordinates entered here are sent to your
-          backend to calculate the estimate and match drivers.
+          service is configured.           Pickup GPS and destination coordinates are sent to your backend to
+          calculate the estimate and match drivers.
         </Text>
       </ScrollView>
     </Screen>

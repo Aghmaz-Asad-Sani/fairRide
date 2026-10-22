@@ -8,6 +8,7 @@ import { HealthModule } from './modules/health/health.module';
 import { DriversModule } from './modules/drivers/drivers.module';
 import { RidesModule } from './modules/rides/rides.module';
 import { KnowledgeBaseModule } from './modules/knowledge-base/knowledge-base.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
   imports: [
@@ -134,6 +135,7 @@ import { KnowledgeBaseModule } from './modules/knowledge-base/knowledge-base.mod
     DriversModule,
     RidesModule,
     KnowledgeBaseModule,
+    AdminModule,
   ],
 })
 export class AppModule {}

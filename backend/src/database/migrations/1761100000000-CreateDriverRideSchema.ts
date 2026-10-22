@@ -4,6 +4,7 @@ export class CreateDriverRideSchema1761100000000 implements MigrationInterface {
   name = 'CreateDriverRideSchema1761100000000';
 
   async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query('CREATE EXTENSION IF NOT EXISTS "postgis"');
     await queryRunner.query(`
       CREATE TYPE "driver_verification_status" AS ENUM
       ('PENDING', 'APPROVED', 'REJECTED')

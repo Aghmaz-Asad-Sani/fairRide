@@ -60,6 +60,33 @@ Vehicle registration accepts `vehicleType` values `CAR`, `BIKE`, or
 `RICKSHAW`; omitted values default to `CAR` for existing clients. `category`
 continues to describe the fare class (`ECONOMY`, `COMFORT`, or `XL`) and is
 independent of vehicle type. Bike and rickshaw ride requests use `ECONOMY`.
+Vehicle submissions include chassis and engine numbers. Driver profile and
+vehicle photos, CNIC images, and licence images are not uploaded; use a secure
+private document-storage workflow before collecting image files.
+
+## Admin dashboard
+
+All admin routes require an authenticated existing `SUPER_ADMIN` account.
+There is no public admin registration endpoint.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/v1/admin/overview` | Read account, trip, and pending-review counts. |
+| GET | `/api/v1/admin/users` | Search and paginate accounts. |
+| PATCH | `/api/v1/admin/users/:userId/status` | Activate/suspend a non-admin account and revoke its sessions when suspended. |
+| GET | `/api/v1/admin/drivers` | Search driver verification records and registered vehicles. |
+| PATCH | `/api/v1/admin/drivers/:driverId/verification` | Approve or reject driver details. |
+| PATCH | `/api/v1/admin/vehicles/:vehicleId/verification` | Approve or reject a registered vehicle. |
+| GET | `/api/v1/admin/rides` | Search and paginate ride records. |
+| PATCH | `/api/v1/admin/rides/:rideId/cancel` | Cancel an active ride and expire its pending offers. |
+| GET | `/api/v1/admin/pricing` | Read fare settings. |
+| PATCH | `/api/v1/admin/pricing` | Update base, distance, duration, and minimum fares for new estimates. |
+
+List routes accept `page`, `pageSize` (maximum 100), and `q`; account routes also
+accept `role` and `status`, driver routes accept `verificationStatus`, and ride
+routes accept `rideStatus`. Account status changes and fare/verification updates
+are audit logged. The Next.js UI lives in `admin/`; configure backend
+`CORS_ORIGINS` to include the dashboard's browser origin.
 
 ## Pricing and rides
 
@@ -117,5 +144,5 @@ Rides currently use cash-only payment and the fare estimate as the final fare.
 The development routing provider returns an explicitly marked straight-line
 approximation. Production requires a configured OSRM-compatible routing
 service; no SMS provider, rematching worker, online payment, ratings,
-safety/support workflows, or operational admin console is included.
+safety/support workflows, or private document-image review is included.
 This API is not production-ready; see the [deployment checklist](deployment.md).

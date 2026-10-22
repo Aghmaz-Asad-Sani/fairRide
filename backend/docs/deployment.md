@@ -49,7 +49,9 @@ HTTP ride lifecycle operations, and single-instance authenticated Socket.IO
 events, but it is not production-ready. There is no real SMS/OTP delivery
 adapter, protected document storage or external identity verification,
 continuous rematching worker, multi-instance socket scaling, online payment or
-payout ledger, ratings, safety/support workflow, admin console, or operational
-alerting. The development OTP and routing adapters are not production
+payout ledger, ratings, safety/support workflow, or operational alerting. The
+SUPER_ADMIN console covers account, ride, fare, and verification operations,
+but document-image review is not available until protected storage is
+configured. The development OTP and routing adapters are not production
 integrations. Do not route real riders or payments to this service until these
 gaps are addressed and tested.

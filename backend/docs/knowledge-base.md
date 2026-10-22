@@ -31,7 +31,7 @@ payments, realtime dispatch, and production operations remain incomplete.
 - **Local infrastructure:** PostgreSQL/PostGIS can run locally or through the
   optional Docker Compose PostgreSQL service.
 - **Current routes:** health, auth, driver onboarding/review, pricing, matching,
-  and ride lifecycle endpoints documented in [the API overview](api.md).
+  ride lifecycle, and SUPER_ADMIN operations documented in [the API overview](api.md).
 - **Identity:** Argon2id password hashes; Pakistan mobile E.164 normalization;
   JWT access tokens checked against active server-side sessions; opaque random
   rotating refresh tokens stored as SHA-256 hashes. Public registration is
@@ -41,8 +41,9 @@ payments, realtime dispatch, and production operations remain incomplete.
 - **Rate limiting:** PostgreSQL atomic upserts limit login by client IP and
   normalized account identifier and registration by client IP. Counters use
   fixed expiry windows and expired rows are cleaned in bounded batches.
-- **Schema:** identity/audit, driver/vehicle, ride/offer, and OTP challenge
-  tables are introduced by versioned TypeORM migrations.
+- **Schema:** identity/audit, driver/vehicle, ride/offer, OTP challenge,
+  PostgreSQL auth limits, and configurable admin fare settings are introduced
+  by versioned TypeORM migrations.
 - **Driver operations:** profile and vehicle document metadata, super-admin
   review, location freshness, and availability gates are implemented.
 - **Pricing/matching:** fares are calculated in integer paisa from configured
@@ -56,6 +57,10 @@ payments, realtime dispatch, and production operations remain incomplete.
 - **Ride lifecycle:** idempotent cash ride request, offer accept/reject,
   arrival, pickup-PIN start, completion, cancellation, and paginated history
   are implemented.
+- **Operations:** the Next.js dashboard and SUPER_ADMIN APIs provide metrics,
+  paginated account/driver/ride review, vehicle/driver decisions, account
+  suspension with session revocation, active ride cancellation, and audited
+  fare settings. Secure document-image storage/review remains unimplemented.
 - **Realtime (single instance):** authenticated Socket.IO connections, active
   session checks, participant-only ride rooms, offer notices, ride status
   events, and driver location updates during an assigned active trip exist.
@@ -215,8 +220,9 @@ PostgreSQL and a generated `JWT_ACCESS_SECRET` to run end-to-end locally.
 7. **Payments/community/safety (planned):** cash-only trips exist; Safepay
    checkout/webhooks, payment ledger, refunds, payout, ratings, incidents, and
    support workflows are not implemented.
-8. **Operations (planned):** bootstrap-only super-admin setup exists; scoped
-   admin console, analytics, and recovery runbooks remain.
+8. **Operations (partial):** bootstrap-only super-admin creation and a scoped
+   account/driver/vehicle/ride/fare dashboard exist. Analytics, secure
+   document-image review, and recovery runbooks remain.
 
 Update this document at the end of each phase. Only mark a feature implemented
 when source code and relevant tests are present.

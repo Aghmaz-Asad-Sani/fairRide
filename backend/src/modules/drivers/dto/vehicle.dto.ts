@@ -46,6 +46,18 @@ export class CreateVehicleDto {
   @MaxLength(20)
   registrationNumber!: string;
 
+  @ApiProperty({ maxLength: 80 })
+  @IsString()
+  @MinLength(3)
+  @MaxLength(80)
+  chassisNumber!: string;
+
+  @ApiProperty({ maxLength: 80 })
+  @IsString()
+  @MinLength(3)
+  @MaxLength(80)
+  engineNumber!: string;
+
   @ApiProperty({ maxLength: 40 })
   @IsString()
   @MinLength(1)

@@ -25,12 +25,14 @@ flows but is not a complete or production-ready ride-hailing service.
   code-return adapter (no SMS provider is configured).
 - Driver profile/vehicle onboarding, admin verification, location and
   availability controls.
+- SUPER_ADMIN dashboard APIs for account status, driver/vehicle review, ride
+  search, operational metrics, and editable fare settings.
 - Server-side fare estimates, bounded PostGIS driver matching, expiring offer
   acceptance, and ride request/arrival/start/complete/cancel/history endpoints.
 - Authenticated Socket.IO ride rooms, offer notifications, lifecycle events,
   and private active-trip driver location events (single-instance only).
-- Versioned identity, driver/vehicle, ride/offer, OTP-challenge, audit, and
-  PostgreSQL rate-limit schema migrations.
+- Versioned identity, driver/vehicle, ride/offer, OTP-challenge, audit,
+  PostgreSQL rate-limit, and admin fare-setting schema migrations.
 
 ## Requirements
 
@@ -53,6 +55,10 @@ npm ci
 npm run migration:run
 npm run start:dev
 ```
+
+If using a local PostgreSQL installation, install the matching PostGIS
+extension package (for Windows, use StackBuilder for that PostgreSQL version)
+before running migrations.
 
 Generate a local signing secret in PowerShell:
 
@@ -134,9 +140,11 @@ not required.
 
 ## Important limitations
 
-There is no real SMS provider, document storage/identity-verification service,
-continuous rematching worker, multi-instance Socket.IO scale-out, online payment or
-payout ledger, ratings, safety/support workflow, or admin console. In
+There is no real SMS provider, secure document image storage/identity-verification
+service, continuous rematching worker, multi-instance Socket.IO scale-out,
+online payment or payout ledger, ratings, or safety/support workflow. The admin
+dashboard reviews submitted metadata only; it does not receive private document
+images. In
 development, set `OTP_DEV_RETURN_CODE=true` to include the code in the OTP
 response. This flag is rejected in production. The development routing provider
 is a marked straight-line approximation; production startup requires

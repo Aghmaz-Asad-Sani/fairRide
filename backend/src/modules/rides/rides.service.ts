@@ -145,7 +145,10 @@ export class RidesService {
     if (route.distanceMeters > 100_000) {
       throw new BadRequestException('Ride distance exceeds the 100 km limit');
     }
-    const fare = this.pricing.estimate(route, input.vehicleCategory);
+    const fare = await this.pricing.estimateCurrent(
+      route,
+      input.vehicleCategory,
+    );
     const pickupPin = randomInt(100000, 1000000).toString();
     const now = new Date();
     const ride = this.dataSource.getRepository(Ride).create({
@@ -285,7 +288,7 @@ export class RidesService {
       throw new BadRequestException('Ride distance exceeds the 100 km limit');
     }
     return {
-      ...this.pricing.estimate(route, input.vehicleCategory),
+      ...(await this.pricing.estimateCurrent(route, input.vehicleCategory)),
       routeSource: route.source,
       estimateExpiresInSeconds: 300,
     };

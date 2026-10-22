@@ -76,6 +76,22 @@ export class Vehicle {
   })
   registrationNumber!: string;
 
+  @Column({
+    name: 'chassis_number',
+    type: 'varchar',
+    length: 80,
+    nullable: true,
+  })
+  chassisNumber!: string | null;
+
+  @Column({
+    name: 'engine_number',
+    type: 'varchar',
+    length: 80,
+    nullable: true,
+  })
+  engineNumber!: string | null;
+
   @Column({ type: 'varchar', length: 40 })
   color!: string;
 

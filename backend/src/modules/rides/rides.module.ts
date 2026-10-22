@@ -36,6 +36,6 @@ import { RideRealtimeGateway } from './ride-realtime.gateway';
     PricingService,
     RideRealtimeGateway,
   ],
-  exports: [RidesService],
+  exports: [RidesService, RideRealtimeGateway],
 })
 export class RidesModule {}

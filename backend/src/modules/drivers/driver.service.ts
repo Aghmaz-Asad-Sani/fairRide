@@ -131,6 +131,8 @@ export class DriverService {
       make: input.make.trim(),
       model: input.model.trim(),
       color: input.color.trim(),
+      chassisNumber: input.chassisNumber.trim().toUpperCase(),
+      engineNumber: input.engineNumber.trim().toUpperCase(),
       registrationNumber: input.registrationNumber
         .trim()
         .replace(/\s+/g, '')

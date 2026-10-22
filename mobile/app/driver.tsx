@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { router, useFocusEffect } from "expo-router";
+import * as Location from "expo-location";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import {
   apiGet,
@@ -31,6 +32,12 @@ const todayPlusYears = (years: number) => {
 
 type VehicleType = "CAR" | "BIKE" | "RICKSHAW";
 type VehicleCategory = "ECONOMY" | "COMFORT" | "XL";
+interface DriverTrip {
+  id: string;
+  status: string;
+  pickupLabel: string;
+  destinationLabel: string;
+}
 
 const vehicleTypes: {
   type: VehicleType;
@@ -43,10 +50,22 @@ const vehicleTypes: {
   { type: "RICKSHAW", title: "Rickshaw", detail: "Local trips", icon: "🛺" },
 ];
 
+async function getCurrentLocation() {
+  const permission = await Location.requestForegroundPermissionsAsync();
+  if (permission.status !== "granted") {
+    throw new Error("Allow location access to go online and receive nearby offers.");
+  }
+  return Location.getCurrentPositionAsync({
+    accuracy: Location.Accuracy.Balanced,
+  });
+}
+
 export default function DriverScreen() {
   const { user, isLoading } = useSession();
   const [profile, setProfile] = useState<DriverProfile | null>(null);
   const [offers, setOffers] = useState<DriverOffer[]>([]);
+  const [activeRide, setActiveRide] = useState<DriverTrip | null>(null);
+  const [pickupPin, setPickupPin] = useState("");
   const [licenseNumber, setLicenseNumber] = useState("");
   const [licenseExpiry, setLicenseExpiry] = useState(todayPlusYears(1));
   const [category, setCategory] = useState<VehicleCategory>("ECONOMY");
@@ -55,15 +74,16 @@ export default function DriverScreen() {
   const [model, setModel] = useState("");
   const [modelYear, setModelYear] = useState(String(new Date().getFullYear()));
   const [registrationNumber, setRegistrationNumber] = useState("");
+  const [chassisNumber, setChassisNumber] = useState("");
+  const [engineNumber, setEngineNumber] = useState("");
   const [color, setColor] = useState("");
   const [capacity, setCapacity] = useState("4");
   const [documentExpiresAt, setDocumentExpiresAt] = useState(todayPlusYears(1));
-  const [latitude, setLatitude] = useState("24.8607");
-  const [longitude, setLongitude] = useState("67.0011");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [setupStep, setSetupStep] = useState(1);
+  const isOnline = profile?.isOnline ?? false;
 
   useEffect(() => {
     if (!isLoading && !user) router.replace("/");
@@ -74,9 +94,10 @@ export default function DriverScreen() {
   const loadDriverData = useCallback(async () => {
     if (!user || user.role !== "DRIVER") return;
     setError("");
-    const [profileResult, offerResult] = await Promise.allSettled([
+    const [profileResult, offerResult, ridesResult] = await Promise.allSettled([
       apiGet<DriverProfile>("/drivers/profile"),
       apiGet<DriverOffer[]>("/drivers/offers"),
+      apiGet<{ items: DriverTrip[] }>("/rides?page=1&limit=20"),
     ]);
     if (profileResult.status === "fulfilled") {
       setProfile(profileResult.value);
@@ -115,13 +136,51 @@ export default function DriverScreen() {
           : "Could not load driver offers.",
       );
     }
+    if (ridesResult.status === "fulfilled") {
+      setActiveRide(
+        ridesResult.value.items.find((ride) =>
+          ["ACCEPTED", "DRIVER_ARRIVING", "IN_PROGRESS"].includes(ride.status),
+        ) ?? null,
+      );
+    } else {
+      setError(
+        ridesResult.reason instanceof Error
+          ? ridesResult.reason.message
+          : "Could not load your active trip.",
+      );
+    }
   }, [user]);
 
   useFocusEffect(
     useCallback(() => {
       void loadDriverData();
+      const timer = setInterval(() => void loadDriverData(), 15_000);
+      return () => clearInterval(timer);
     }, [loadDriverData]),
   );
+
+  useEffect(() => {
+    if (!isOnline) return;
+    const timer = setInterval(() => {
+      void (async () => {
+        try {
+          const location = await getCurrentLocation();
+          await apiPost("/drivers/location", {
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            accuracyMeters: location.coords.accuracy ?? undefined,
+          });
+        } catch (cause) {
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : "Could not refresh your current location.",
+          );
+        }
+      })();
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, [isOnline]);
 
   if (isLoading || !user || !user.phoneVerified || user.role !== "DRIVER") {
     return <LoadingView />;
@@ -172,6 +231,8 @@ export default function DriverScreen() {
         model: model.trim(),
         modelYear: Number(modelYear),
         registrationNumber: registrationNumber.trim(),
+        chassisNumber: chassisNumber.trim(),
+        engineNumber: engineNumber.trim(),
         color: color.trim(),
         passengerCapacity: Number(capacity),
         documentExpiresAt,
@@ -193,12 +254,19 @@ export default function DriverScreen() {
     setMessage("");
     try {
       if (online) {
+        const location = await getCurrentLocation();
         await apiPost("/drivers/location", {
-          latitude: Number(latitude),
-          longitude: Number(longitude),
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          accuracyMeters: location.coords.accuracy ?? undefined,
         });
       }
       await apiPatch("/drivers/availability", { online, available: online });
+      setProfile((current) =>
+        current
+          ? { ...current, isOnline: online, isAvailable: online }
+          : current,
+      );
       setMessage(
         online
           ? "Driver account is online and available."
@@ -211,6 +279,7 @@ export default function DriverScreen() {
     } finally {
       setBusy(false);
     }
+
   }
 
   async function answerOffer(rideId: string, accept: boolean) {
@@ -225,6 +294,36 @@ export default function DriverScreen() {
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Could not update the offer.",
+      );
+    } finally {
+      setBusy(false);
+    }
+
+  }
+
+  async function updateActiveRide(action: "arrived" | "start" | "complete") {
+    if (!activeRide) return;
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      if (action === "start") {
+        await apiPost(`/rides/${activeRide.id}/start`, { pin: pickupPin.trim() });
+        setPickupPin("");
+      } else {
+        await apiPost(`/rides/${activeRide.id}/${action}`, {});
+      }
+      setMessage(
+        action === "arrived"
+          ? "Pickup arrival recorded."
+          : action === "start"
+            ? "Ride started."
+            : "Ride completed.",
+      );
+      await loadDriverData();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Could not update this ride.",
       );
     } finally {
       setBusy(false);
@@ -469,6 +568,19 @@ export default function DriverScreen() {
               onChangeText={setRegistrationNumber}
               autoCapitalize="characters"
             />
+            <Field
+              label="Chassis number"
+              value={chassisNumber}
+              onChangeText={setChassisNumber}
+              autoCapitalize="characters"
+            />
+            <Field
+              label="Engine number"
+              value={engineNumber}
+              onChangeText={setEngineNumber}
+              autoCapitalize="characters"
+            />
+            <Notice message="Private document photo uploads (profile photo, CNIC and licence images) are not enabled yet. Do not send these documents through chat or an unprotected link." />
             <View style={uiStyles.row}>
               <View style={{ flex: 1 }}>
                 <Field label="Color" value={color} onChangeText={setColor} />
@@ -523,29 +635,11 @@ export default function DriverScreen() {
                 <Text
                   style={[uiStyles.body, { marginTop: 5, marginBottom: 10 }]}
                 >
-                  Enter a current GPS position. This starter does not collect
-                  background location when the app is closed.
+                  FairRide uses your current GPS location while the app is open.
+                  Location sharing stops when you go offline or close the app.
                 </Text>
-                <View style={uiStyles.row}>
-                  <View style={{ flex: 1 }}>
-                    <Field
-                      label="Current latitude"
-                      keyboardType="decimal-pad"
-                      value={latitude}
-                      onChangeText={setLatitude}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Field
-                      label="Current longitude"
-                      keyboardType="decimal-pad"
-                      value={longitude}
-                      onChangeText={setLongitude}
-                    />
-                  </View>
-                </View>
                 <Button
-                  title="Go online"
+                  title="Go online with current location"
                   onPress={() => setAvailability(true)}
                   busy={busy}
                 />
@@ -593,6 +687,47 @@ export default function DriverScreen() {
                 </Card>
               ))
             )}
+            {activeRide ? (
+              <Card>
+                <Text style={uiStyles.sectionTitle}>
+                  Active trip · {activeRide.status.replaceAll("_", " ")}
+                </Text>
+                <Text style={[uiStyles.body, { marginTop: 6 }]}>
+                  {activeRide.pickupLabel} → {activeRide.destinationLabel}
+                </Text>
+                {activeRide.status === "ACCEPTED" ? (
+                  <Button
+                    title="I’ve arrived at pickup"
+                    onPress={() => updateActiveRide("arrived")}
+                    busy={busy}
+                    style={{ marginTop: 12 }}
+                  />
+                ) : null}
+                {activeRide.status === "DRIVER_ARRIVING" ? (
+                  <>
+                    <Field
+                      label="Passenger pickup PIN"
+                      keyboardType="number-pad"
+                      value={pickupPin}
+                      onChangeText={setPickupPin}
+                    />
+                    <Button
+                      title="Verify PIN and start ride"
+                      onPress={() => updateActiveRide("start")}
+                      busy={busy}
+                    />
+                  </>
+                ) : null}
+                {activeRide.status === "IN_PROGRESS" ? (
+                  <Button
+                    title="Complete ride"
+                    onPress={() => updateActiveRide("complete")}
+                    busy={busy}
+                    style={{ marginTop: 12 }}
+                  />
+                ) : null}
+              </Card>
+            ) : null}
           </>
         ) : null}
       </ScrollView>

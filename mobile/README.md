@@ -5,7 +5,8 @@ Expo + React Native + TypeScript app, kept separate from the backend under
 
 ## Start in VS Code
 
-1. Run PostgreSQL, Redis, migrations, and the backend from `backend/`:
+1. Run PostgreSQL with PostGIS, migrations, and the backend from `backend/`.
+   Redis and Docker are not required:
 
    ```powershell
    cd ..\backend
@@ -76,16 +77,17 @@ and use HTTPS. Never put credentials in `EXPO_PUBLIC_*` variables.
   in Expo SecureStore, automatic refresh after an expired access token.
 - Phone OTP request and verification (the backend still needs a real SMS
   provider for live messages).
-- Passenger server-priced estimates and idempotent cash ride requests. The
-  initial screen asks for coordinates; map selection/geocoding is not wired.
+- Passenger server-priced estimates, GPS pickup selection, device place-name
+  destination geocoding, active-ride polling, cancellation, and idempotent cash
+  ride requests. An interactive map and map-tile navigation are not wired.
 - Guided driver setup for licence details, vehicle details, administrator
-  review, then availability and ride offers after approval. The app collects
-  document details, but document image upload and automatic GPS are not wired.
+  review, chassis/engine metadata, foreground GPS availability, and ride offer
+  lifecycle controls after approval. Secure document image upload is not wired.
 - API origin editor for emulator or physical Android device.
 
-Driver coordinates currently need to be entered manually; background GPS,
-push, a native live map, online payment, and full in-trip socket navigation
-remain future work.
+Drivers share foreground GPS while the app is open; background tracking,
+push, an interactive live map, online payment, and full in-trip socket
+navigation remain future work.
 
 ## Checks
 
@@ -96,5 +98,5 @@ npx expo-doctor
 ```
 
 The backend API details are in `../backend/docs/api.md`. The backend must be
-running and its PostgreSQL/Redis readiness check must pass to exercise auth and
-ride flows.
+running and its PostgreSQL readiness check must pass to exercise auth and ride
+flows.
