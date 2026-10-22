@@ -7,7 +7,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { VehicleCategory } from '../drivers/vehicle.entity';
+import { VehicleCategory, VehicleType } from '../drivers/vehicle.entity';
 import type { FareBreakdown } from '../pricing/pricing.service';
 
 export enum RideStatus {
@@ -49,6 +49,15 @@ export class Ride {
     enumName: 'vehicle_category',
   })
   vehicleCategory!: VehicleCategory;
+
+  @Column({
+    name: 'vehicle_type',
+    type: 'enum',
+    enum: VehicleType,
+    enumName: 'vehicle_type',
+    default: VehicleType.CAR,
+  })
+  vehicleType!: VehicleType;
 
   @Column({ name: 'pickup_latitude', type: 'double precision' })
   pickupLatitude!: number;

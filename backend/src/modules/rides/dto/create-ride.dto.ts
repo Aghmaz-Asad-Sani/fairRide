@@ -3,11 +3,12 @@ import {
   IsEnum,
   IsLatitude,
   IsLongitude,
+  IsOptional,
   IsString,
   MaxLength,
   MinLength,
 } from 'class-validator';
-import { VehicleCategory } from '../../drivers/vehicle.entity';
+import { VehicleCategory, VehicleType } from '../../drivers/vehicle.entity';
 
 export class CreateRideDto {
   @ApiProperty({ minimum: -90, maximum: 90 })
@@ -41,4 +42,9 @@ export class CreateRideDto {
   @ApiProperty({ enum: VehicleCategory })
   @IsEnum(VehicleCategory)
   vehicleCategory!: VehicleCategory;
+
+  @ApiProperty({ enum: VehicleType, default: VehicleType.CAR, required: false })
+  @IsOptional()
+  @IsEnum(VehicleType)
+  vehicleType: VehicleType = VehicleType.CAR;
 }

@@ -4,17 +4,23 @@ import {
   IsEnum,
   IsInt,
   IsString,
+  IsOptional,
   Max,
   MaxLength,
   Min,
   MinLength,
 } from 'class-validator';
-import { VehicleCategory } from '../vehicle.entity';
+import { VehicleCategory, VehicleType } from '../vehicle.entity';
 
 export class CreateVehicleDto {
   @ApiProperty({ enum: VehicleCategory })
   @IsEnum(VehicleCategory)
   category!: VehicleCategory;
+
+  @ApiProperty({ enum: VehicleType, default: VehicleType.CAR })
+  @IsOptional()
+  @IsEnum(VehicleType)
+  vehicleType: VehicleType = VehicleType.CAR;
 
   @ApiProperty({ maxLength: 60 })
   @IsString()

@@ -53,7 +53,7 @@ import { KnowledgeBaseModule } from './modules/knowledge-base/knowledge-base.mod
           .integer()
           .min(500)
           .max(30000)
-          .default(8000),
+          .default(4000),
         DRIVER_MATCH_LIMIT: Joi.number().integer().min(1).max(20).default(5),
         RIDE_OFFER_TTL_SECONDS: Joi.number()
           .integer()

@@ -55,6 +55,11 @@ driver can go online. The app stores document metadata only; it does not upload
 or verify document images. Location is private to the driver and used by
 server-side matching.
 
+Vehicle registration accepts `vehicleType` values `CAR`, `BIKE`, or
+`RICKSHAW`; omitted values default to `CAR` for existing clients. `category`
+continues to describe the fare class (`ECONOMY`, `COMFORT`, or `XL`) and is
+independent of vehicle type. Bike and rickshaw ride requests use `ECONOMY`.
+
 ## Pricing and rides
 
 | Method | Path | Purpose |
@@ -75,6 +80,13 @@ Ride requests require a verified passenger phone. Matching creates bounded,
 expiring offers for nearby eligible drivers. Assignment is conditional and
 transactional. The pickup PIN is returned only when creating a ride; stored
 hash/encrypted values are not intended for API responses.
+
+Fare-estimate and ride-create bodies accept optional `vehicleType` (`CAR`,
+`BIKE`, `RICKSHAW`), defaulting to `CAR`. Matching requires both the requested
+vehicle type and fare category to match an active, approved driver vehicle.
+The default pickup matching radius is 4,000 metres; set
+`DRIVER_MATCH_RADIUS_METERS=4000` in the runtime environment to pin that
+behavior, since an explicit environment override takes precedence.
 
 ## Realtime Socket.IO
 

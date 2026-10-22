@@ -22,7 +22,7 @@ import {
 import { DataSource, QueryFailedError } from 'typeorm';
 import { AuditLog } from '../../database/audit-log.entity';
 import { DriverProfile } from '../drivers/driver-profile.entity';
-import { VehicleCategory } from '../drivers/vehicle.entity';
+import { VehicleCategory, VehicleType } from '../drivers/vehicle.entity';
 import { Coordinates, RoutingService } from '../maps/routing.service';
 import { PricingService } from '../pricing/pricing.service';
 import { FareEstimateDto } from '../pricing/dto/fare-estimate.dto';
@@ -74,7 +74,7 @@ export class RidesService {
     this.offerTtlSeconds = config.get<number>('RIDE_OFFER_TTL_SECONDS', 45);
     this.matchRadiusMeters = config.get<number>(
       'DRIVER_MATCH_RADIUS_METERS',
-      8000,
+      4000,
     );
     this.matchLimit = config.get<number>('DRIVER_MATCH_LIMIT', 5);
     this.maxLocationAgeSeconds = config.get<number>(
@@ -154,6 +154,7 @@ export class RidesService {
       driverId: null,
       status: RideStatus.SEARCHING,
       vehicleCategory: input.vehicleCategory,
+      vehicleType: input.vehicleType ?? VehicleType.CAR,
       pickupLatitude: input.pickupLatitude,
       pickupLongitude: input.pickupLongitude,
       pickupLabel: input.pickupLabel.trim(),
@@ -183,6 +184,7 @@ export class RidesService {
     const candidates = await this.findNearbyDrivers(
       pickup,
       input.vehicleCategory,
+      input.vehicleType ?? VehicleType.CAR,
     );
     const offerExpiresAt = new Date(
       now.getTime() + this.offerTtlSeconds * 1000,
@@ -308,6 +310,7 @@ export class RidesService {
         'ride.estimatedFarePaisa AS "estimatedFarePaisa"',
         'ride.currency AS "currency"',
         'ride.vehicleCategory AS "vehicleCategory"',
+        'ride.vehicleType AS "vehicleType"',
       ])
       .where('offer.driverId = :driverId', { driverId: user.id })
       .andWhere('offer.status = :offerStatus', {
@@ -342,6 +345,7 @@ export class RidesService {
              JOIN rides r ON r.id = $2
              JOIN ride_offers ro ON ro.ride_id = r.id AND ro.driver_id = dp.user_id
              WHERE v.driver_id = dp.user_id AND v.category = r.vehicle_category
+               AND v.vehicle_type = r.vehicle_type
                AND v.is_active = true AND v.verification_status = 'APPROVED'
                AND v.document_expires_at > CURRENT_DATE
                AND ro.status = 'PENDING' AND ro.expires_at > now()
@@ -663,6 +667,7 @@ export class RidesService {
   private async findNearbyDrivers(
     pickup: Coordinates,
     category: VehicleCategory,
+    vehicleType: VehicleType,
   ): Promise<MatchingCandidate[]> {
     const rows: unknown = await this.dataSource.query(
       `SELECT dp.user_id,
@@ -674,7 +679,7 @@ export class RidesService {
        JOIN users u ON u.id = dp.user_id AND u.status = 'ACTIVE'
          AND u.phone_verified_at IS NOT NULL
        JOIN vehicles v ON v.driver_id = dp.user_id
-         AND v.category = $3 AND v.is_active = true
+         AND v.category = $3 AND v.vehicle_type = $4 AND v.is_active = true
          AND v.verification_status = 'APPROVED'
          AND v.document_expires_at > CURRENT_DATE
        WHERE dp.verification_status = 'APPROVED'
@@ -682,22 +687,23 @@ export class RidesService {
          AND dp.is_online = true AND dp.is_available = true
          AND dp.license_expiry > CURRENT_DATE
          AND dp.latitude IS NOT NULL AND dp.longitude IS NOT NULL
-         AND dp.last_location_at > now() - ($5 * interval '1 second')
+         AND dp.last_location_at > now() - ($6 * interval '1 second')
          AND ST_DWithin(
            ST_SetSRID(ST_MakePoint(dp.longitude, dp.latitude), 4326)::geography,
            ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography,
-           $4
+           $5
          )
        GROUP BY dp.user_id
        ORDER BY MIN(ST_Distance(
          ST_SetSRID(ST_MakePoint(dp.longitude, dp.latitude), 4326)::geography,
          ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography
        )) ASC
-       LIMIT $6`,
+       LIMIT $7`,
       [
         pickup.longitude,
         pickup.latitude,
         category,
+        vehicleType,
         this.matchRadiusMeters,
         this.maxLocationAgeSeconds,
         this.matchLimit,
@@ -791,6 +797,7 @@ export class RidesService {
           destinationLongitude: input.destinationLongitude,
           destinationLabel: input.destinationLabel.trim(),
           vehicleCategory: input.vehicleCategory,
+          vehicleType: input.vehicleType ?? VehicleType.CAR,
         }),
       )
       .digest('hex');
@@ -852,6 +859,7 @@ export class RidesService {
       id: ride.id,
       status: ride.status,
       vehicleCategory: ride.vehicleCategory,
+      vehicleType: ride.vehicleType,
       pickup: {
         latitude: ride.pickupLatitude,
         longitude: ride.pickupLongitude,

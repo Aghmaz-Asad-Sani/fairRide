@@ -47,6 +47,11 @@ payments, realtime dispatch, and production operations remain incomplete.
 - **Pricing/matching:** fares are calculated in integer paisa from configured
   rules and a routing provider boundary. Nearby-driver candidates use bounded
   PostGIS queries; active offers expire and driver assignment is transactional.
+- **Vehicle matching:** vehicles and ride requests distinguish `CAR`, `BIKE`,
+  and `RICKSHAW` from the existing `ECONOMY`, `COMFORT`, and `XL` fare class.
+  Legacy clients default to `CAR`; bike and rickshaw rides use `ECONOMY`.
+  Matching requires an approved vehicle of the requested type and category,
+  with a default pickup radius of 4 km.
 - **Ride lifecycle:** idempotent cash ride request, offer accept/reject,
   arrival, pickup-PIN start, completion, cancellation, and paginated history
   are implemented.
@@ -128,6 +133,9 @@ when meaningful, and document production setup and failure behavior.
 - Use idempotency keys for request creation and critical financial/lifecycle
   operations. Record actor and timestamps for meaningful transitions.
 - Bound matching radius, retries, offer expiry, and query results.
+- Apply the `AddVehicleTypeAndFourKmMatching` database migration before
+  deploying the vehicle-type API. Set `DRIVER_MATCH_RADIUS_METERS=4000` in the
+  runtime environment if the four-kilometre default must be explicit.
 - Define measurable fairness metrics before claiming the matching process is
   fair; evaluate opportunity distribution and cancellation/reliability effects
   against real pilot data.

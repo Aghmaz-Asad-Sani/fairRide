@@ -16,6 +16,12 @@ export enum VehicleCategory {
   XL = 'XL',
 }
 
+export enum VehicleType {
+  CAR = 'CAR',
+  BIKE = 'BIKE',
+  RICKSHAW = 'RICKSHAW',
+}
+
 export enum VehicleVerificationStatus {
   PENDING = 'PENDING',
   APPROVED = 'APPROVED',
@@ -43,6 +49,15 @@ export class Vehicle {
     enumName: 'vehicle_category',
   })
   category!: VehicleCategory;
+
+  @Column({
+    name: 'vehicle_type',
+    type: 'enum',
+    enum: VehicleType,
+    enumName: 'vehicle_type',
+    default: VehicleType.CAR,
+  })
+  vehicleType!: VehicleType;
 
   @Column({ type: 'varchar', length: 60 })
   make!: string;

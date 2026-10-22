@@ -1,6 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsLatitude, IsLongitude } from 'class-validator';
-import { VehicleCategory } from '../../drivers/vehicle.entity';
+import {
+  IsEnum,
+  IsLatitude,
+  IsLongitude,
+  IsOptional,
+} from 'class-validator';
+import { VehicleCategory, VehicleType } from '../../drivers/vehicle.entity';
 
 export class FareEstimateDto {
   @ApiProperty({ minimum: -90, maximum: 90 })
@@ -22,4 +27,9 @@ export class FareEstimateDto {
   @ApiProperty({ enum: VehicleCategory })
   @IsEnum(VehicleCategory)
   vehicleCategory!: VehicleCategory;
+
+  @ApiProperty({ enum: VehicleType, default: VehicleType.CAR, required: false })
+  @IsOptional()
+  @IsEnum(VehicleType)
+  vehicleType: VehicleType = VehicleType.CAR;
 }
