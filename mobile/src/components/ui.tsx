@@ -12,6 +12,7 @@ import {
   ViewProps,
   ViewStyle,
 } from "react-native";
+import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 
 export const colors = {
   ink: "#111B2E",
@@ -41,12 +42,17 @@ export const fontFamilies = {
 export function Screen({
   children,
   style,
+  safeAreaEdges = ["left", "right", "bottom"],
   ...props
-}: PropsWithChildren<ViewProps>) {
+}: PropsWithChildren<ViewProps & { safeAreaEdges?: Edge[] }>) {
   return (
-    <View style={[styles.screen, style]} {...props}>
+    <SafeAreaView
+      edges={safeAreaEdges}
+      style={[styles.screen, style]}
+      {...props}
+    >
       {children}
-    </View>
+    </SafeAreaView>
   );
 }
 

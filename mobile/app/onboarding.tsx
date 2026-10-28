@@ -82,7 +82,10 @@ export default function OnboardingScreen() {
   }
 
   return (
-    <Screen style={styles.screen}>
+    <Screen
+      style={styles.screen}
+      safeAreaEdges={["top", "right", "bottom", "left"]}
+    >
       <View style={styles.topBar}>
         <Pressable
           accessibilityRole="button"

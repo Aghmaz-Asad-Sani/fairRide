@@ -6,23 +6,23 @@ All application endpoints use the `/api/v1` prefix. Swagger UI is served at
 
 ## Health
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| GET | `/api/v1/health/live` | Process liveness; no dependency checks. |
-| GET | `/api/v1/health/ready` | PostgreSQL readiness; returns 503 if the database is unavailable. |
+| Method | Path                   | Purpose                                                           |
+| ------ | ---------------------- | ----------------------------------------------------------------- |
+| GET    | `/api/v1/health/live`  | Process liveness; no dependency checks.                           |
+| GET    | `/api/v1/health/ready` | PostgreSQL readiness; returns 503 if the database is unavailable. |
 
 ## Authentication
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| POST | `/api/v1/auth/register` | Create a passenger or driver account and issue a session. |
-| POST | `/api/v1/auth/login` | Authenticate with a Pakistan mobile number or email and password. |
-| POST | `/api/v1/auth/refresh` | Rotate a one-time refresh token and issue new tokens. |
-| POST | `/api/v1/auth/phone/otp/request` | Request phone verification code (Bearer token required). |
-| POST | `/api/v1/auth/phone/otp/verify` | Verify phone ownership (Bearer token required). |
-| GET | `/api/v1/auth/me` | Get the current account profile (Bearer token required). |
-| POST | `/api/v1/auth/logout` | Revoke the current session (Bearer token required). |
-| POST | `/api/v1/auth/logout-all` | Revoke all account sessions (Bearer token required). |
+| Method | Path                             | Purpose                                                           |
+| ------ | -------------------------------- | ----------------------------------------------------------------- |
+| POST   | `/api/v1/auth/register`          | Create a passenger or driver account and issue a session.         |
+| POST   | `/api/v1/auth/login`             | Authenticate with a Pakistan mobile number or email and password. |
+| POST   | `/api/v1/auth/refresh`           | Rotate a one-time refresh token and issue new tokens.             |
+| POST   | `/api/v1/auth/phone/otp/request` | Request phone verification code (Bearer token required).          |
+| POST   | `/api/v1/auth/phone/otp/verify`  | Verify phone ownership (Bearer token required).                   |
+| GET    | `/api/v1/auth/me`                | Get the current account profile (Bearer token required).          |
+| POST   | `/api/v1/auth/logout`            | Revoke the current session (Bearer token required).               |
+| POST   | `/api/v1/auth/logout-all`        | Revoke all account sessions (Bearer token required).              |
 
 Registration accepts only `PASSENGER` or `DRIVER`; privileged roles cannot be
 self-assigned. Passwords require 12-128 characters. Mobile numbers are
@@ -39,17 +39,17 @@ proxy.
 
 ## Drivers
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| POST | `/api/v1/drivers/profile` | Submit or update driver license details. |
-| GET | `/api/v1/drivers/profile` | Get your driver verification profile and vehicles. |
-| POST | `/api/v1/drivers/vehicles` | Register a vehicle for verification. |
-| GET | `/api/v1/drivers/vehicles` | List your vehicles. |
-| PATCH | `/api/v1/drivers/vehicles/:vehicleId/active` | Activate/deactivate your vehicle. |
-| POST | `/api/v1/drivers/location` | Update your driver location. |
-| PATCH | `/api/v1/drivers/availability` | Set online and offer availability. |
-| PATCH | `/api/v1/drivers/admin/:driverId/verification` | Review a driver (SUPER_ADMIN). |
-| PATCH | `/api/v1/drivers/admin/vehicles/:vehicleId/verification` | Review a vehicle (SUPER_ADMIN). |
+| Method | Path                                                     | Purpose                                            |
+| ------ | -------------------------------------------------------- | -------------------------------------------------- |
+| POST   | `/api/v1/drivers/profile`                                | Submit or update driver license details.           |
+| GET    | `/api/v1/drivers/profile`                                | Get your driver verification profile and vehicles. |
+| POST   | `/api/v1/drivers/vehicles`                               | Register a vehicle for verification.               |
+| GET    | `/api/v1/drivers/vehicles`                               | List your vehicles.                                |
+| PATCH  | `/api/v1/drivers/vehicles/:vehicleId/active`             | Activate/deactivate your vehicle.                  |
+| POST   | `/api/v1/drivers/location`                               | Update your driver location.                       |
+| PATCH  | `/api/v1/drivers/availability`                           | Set online and offer availability.                 |
+| PATCH  | `/api/v1/drivers/admin/:driverId/verification`           | Review a driver (SUPER_ADMIN).                     |
+| PATCH  | `/api/v1/drivers/admin/vehicles/:vehicleId/verification` | Review a vehicle (SUPER_ADMIN).                    |
 
 Driver profile and vehicle submissions require super-admin approval before a
 driver can go online. The app stores document metadata only; it does not upload
@@ -69,40 +69,43 @@ private document-storage workflow before collecting image files.
 All admin routes require an authenticated existing `SUPER_ADMIN` account.
 There is no public admin registration endpoint.
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| GET | `/api/v1/admin/overview` | Read account, trip, and pending-review counts. |
-| GET | `/api/v1/admin/users` | Search and paginate accounts. |
-| PATCH | `/api/v1/admin/users/:userId/status` | Activate/suspend a non-admin account and revoke its sessions when suspended. |
-| GET | `/api/v1/admin/drivers` | Search driver verification records and registered vehicles. |
-| PATCH | `/api/v1/admin/drivers/:driverId/verification` | Approve or reject driver details. |
-| PATCH | `/api/v1/admin/vehicles/:vehicleId/verification` | Approve or reject a registered vehicle. |
-| GET | `/api/v1/admin/rides` | Search and paginate ride records. |
-| PATCH | `/api/v1/admin/rides/:rideId/cancel` | Cancel an active ride and expire its pending offers. |
-| GET | `/api/v1/admin/pricing` | Read fare settings. |
-| PATCH | `/api/v1/admin/pricing` | Update base, distance, duration, and minimum fares for new estimates. |
+| Method | Path                                             | Purpose                                                                                                                      |
+| ------ | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/v1/admin/overview`                         | Read passenger/driver registrations, active/verified/online account counts, pending reviews, and 30-day ride/fare analytics. |
+| GET    | `/api/v1/admin/users`                            | Search and paginate accounts.                                                                                                |
+| GET    | `/api/v1/admin/users/:userId/rides`              | Read paginated ride history and total/completed/cancelled ride counts for a passenger or driver.                             |
+| PATCH  | `/api/v1/admin/users/:userId/status`             | Activate/suspend a non-admin account and revoke its sessions when suspended.                                                 |
+| GET    | `/api/v1/admin/drivers`                          | Search driver verification records and registered vehicles.                                                                  |
+| PATCH  | `/api/v1/admin/drivers/:driverId/verification`   | Approve or reject driver details.                                                                                            |
+| PATCH  | `/api/v1/admin/vehicles/:vehicleId/verification` | Approve or reject a registered vehicle.                                                                                      |
+| GET    | `/api/v1/admin/rides`                            | Search and paginate ride records.                                                                                            |
+| PATCH  | `/api/v1/admin/rides/:rideId/cancel`             | Cancel an active ride and expire its pending offers.                                                                         |
+| GET    | `/api/v1/admin/pricing`                          | Read fare settings.                                                                                                          |
+| PATCH  | `/api/v1/admin/pricing`                          | Update manual fuel price, car-class efficiencies and fares, and bike/rickshaw fares for new estimates.                       |
 
 List routes accept `page`, `pageSize` (maximum 100), and `q`; account routes also
 accept `role` and `status`, driver routes accept `verificationStatus`, and ride
-routes accept `rideStatus`. Account status changes and fare/verification updates
-are audit logged. The Next.js UI lives in `admin/`; configure backend
+routes accept `rideStatus`. Driver records include current online/available
+state. Account status changes and fare/verification updates are audit logged.
+Permanent account deletion and fare refunds are not available. The Next.js UI
+lives in `admin/`; configure backend
 `CORS_ORIGINS` to include the dashboard's browser origin.
 
 ## Pricing and rides
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| POST | `/api/v1/pricing/estimate` | Return a server-priced estimate in PKR paisa. |
-| POST | `/api/v1/rides` | Create an idempotent cash ride request; requires `Idempotency-Key`. |
-| GET | `/api/v1/rides` | List your paginated ride history. |
-| GET | `/api/v1/rides/:rideId` | Get a ride visible to its passenger or assigned driver. |
-| GET | `/api/v1/drivers/offers` | List your active driver offers. |
-| POST | `/api/v1/drivers/offers/:rideId/accept` | Atomically accept an eligible offer. |
-| POST | `/api/v1/drivers/offers/:rideId/reject` | Reject a pending offer. |
-| POST | `/api/v1/rides/:rideId/arrived` | Mark arrival at pickup. |
-| POST | `/api/v1/rides/:rideId/start` | Verify passenger pickup PIN and start the trip. |
-| POST | `/api/v1/rides/:rideId/complete` | Complete trip and finalize the estimated fare. |
-| POST | `/api/v1/rides/:rideId/cancel` | Cancel before the trip begins. |
+| Method | Path                                    | Purpose                                                                           |
+| ------ | --------------------------------------- | --------------------------------------------------------------------------------- |
+| POST   | `/api/v1/pricing/estimate`              | Return a server-priced estimate in PKR paisa, with route geometry when available. |
+| POST   | `/api/v1/rides`                         | Create an idempotent cash ride request; requires `Idempotency-Key`.               |
+| GET    | `/api/v1/rides`                         | List your paginated ride history.                                                 |
+| GET    | `/api/v1/rides/:rideId`                 | Get a ride visible to its passenger or assigned driver; an assigned driver's fresh location is included only for that passenger. |
+| GET    | `/api/v1/drivers/offers`                | List your active driver offers.                                                   |
+| POST   | `/api/v1/drivers/offers/:rideId/accept` | Atomically accept an eligible offer.                                              |
+| POST   | `/api/v1/drivers/offers/:rideId/reject` | Reject a pending offer.                                                           |
+| POST   | `/api/v1/rides/:rideId/arrived`         | Mark arrival at pickup.                                                           |
+| POST   | `/api/v1/rides/:rideId/start`           | Verify passenger pickup PIN and start the trip.                                   |
+| POST   | `/api/v1/rides/:rideId/complete`        | Complete trip and finalize the estimated fare.                                    |
+| POST   | `/api/v1/rides/:rideId/cancel`          | Cancel before the trip begins.                                                    |
 
 Ride requests require a verified passenger phone. Matching creates bounded,
 expiring offers for nearby eligible drivers. Assignment is conditional and
@@ -116,6 +119,24 @@ The default pickup matching radius is 4,000 metres; set
 `DRIVER_MATCH_RADIUS_METERS=4000` in the runtime environment to pin that
 behavior, since an explicit environment override takes precedence.
 
+Fare settings are independently configurable for Economy, Comfort, and XL
+cars, plus bikes and rickshaws. Car classes have separate base, other-cost per
+km, per-minute, minimum-fare, and fuel-efficiency values. Car fare uses:
+`max(minimum, base + distance_km * (fuel_price_per_litre / efficiency_km_per_litre + other_cost_per_km) + duration_minutes * per_minute_fare)`.
+The administrator must enter a positive current petrol price before car
+estimates are available. Initial example efficiencies are 12 km/L for
+Economy, 10 for Comfort, and 8 for XL; adjust them to the fleet. Bike and
+rickshaw rates initially copy the existing shared rates.
+Route estimates and ride requests are limited to 1,400 km by default; configure
+`RIDE_MAX_DISTANCE_KM` to change the limit. Long intercity trips are routed through the configured OSRM service or Google
+Routes, but driver matching still depends on a nearby eligible driver being
+online. OSRM responses include road-following `routeGeometry` but no live
+traffic. Google Routes uses traffic-aware duration and returns both traffic and
+typical-condition durations, plus road geometry. The mobile app uses Google
+Maps and its traffic layer when platform SDK keys are configured, otherwise it
+falls back to OpenStreetMap tiles with attribution. Development routing only
+provides an approximate connector, not a road path.
+
 ## Realtime Socket.IO
 
 Socket.IO is available at the `/realtime` namespace on the API origin. Connect
@@ -124,16 +145,16 @@ with `auth: { accessToken: "<JWT access token>" }` or an
 the active account and session at connect and again before protected events.
 The configured `CORS_ORIGINS` allowlist also applies to browser clients.
 
-| Direction | Event | Payload / authorization |
-| --- | --- | --- |
-| Server → client | `connection:ready` | Authenticated `userId`. |
-| Client → server | `ride:join` | `{ rideId }`; only the passenger or assigned driver may join. |
-| Client → server | `ride:leave` | `{ rideId }`; leaves the room. |
-| Server → room | `ride:status` | `{ rideId, status, emittedAt }`; lifecycle updates. |
-| Server → driver | `driver:offer-created` | `{ rideId }`; sent to the eligible driver's private room. |
-| Driver → server | `driver:location` | `{ latitude, longitude, accuracyMeters? }`; driver role and coordinate bounds required. |
-| Server → trip room | `ride:driver-location` | Driver location only for an assigned active trip room. |
-| Server → sender | `ride:joined`, `ride:left`, `driver:location:accepted` | Socket.IO acknowledgements for accepted commands. |
+| Direction          | Event                                                  | Payload / authorization                                                                 |
+| ------------------ | ------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| Server → client    | `connection:ready`                                     | Authenticated `userId`.                                                                 |
+| Client → server    | `ride:join`                                            | `{ rideId }`; only the passenger or assigned driver may join.                           |
+| Client → server    | `ride:leave`                                           | `{ rideId }`; leaves the room.                                                          |
+| Server → room      | `ride:status`                                          | `{ rideId, status, emittedAt }`; lifecycle updates.                                     |
+| Server → driver    | `driver:offer-created`                                 | `{ rideId }`; sent to the eligible driver's private room.                               |
+| Driver → server    | `driver:location`                                      | `{ latitude, longitude, accuracyMeters? }`; driver role and coordinate bounds required. |
+| Server → trip room | `ride:driver-location`                                 | Driver location only for an assigned active trip room.                                  |
+| Server → sender    | `ride:joined`, `ride:left`, `driver:location:accepted` | Socket.IO acknowledgements for accepted commands.                                       |
 
 The socket connection is single-instance at present. Redis Socket.IO
 scale-out, mobile client reconnect/resync behavior, event replay, monitoring
@@ -144,5 +165,6 @@ Rides currently use cash-only payment and the fare estimate as the final fare.
 The development routing provider returns an explicitly marked straight-line
 approximation. Production requires a configured OSRM-compatible routing
 service; no SMS provider, rematching worker, online payment, ratings,
-safety/support workflows, or private document-image review is included.
+safety/support workflows, or private document-image review is included. For
+local WSL setup, see [Local OSRM routing](../README.md#local-osrm-routing-with-wsl).
 This API is not production-ready; see the [deployment checklist](deployment.md).

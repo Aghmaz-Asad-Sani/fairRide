@@ -25,7 +25,8 @@ Expo + React Native + TypeScript app, kept separate from the backend under
 3. For a physical Android phone, update/install **Expo Go** from Google Play.
    Connect the phone and computer to the same Wi-Fi. From the `mobile/`
    terminal, start Expo explicitly in Go mode (no Expo account or tunnel
-   needed). This project is pinned to Expo SDK 57 to match Expo Go 57:
+   needed). The map uses OpenStreetMap tiles until native Google Maps keys are
+   configured. This project is pinned to Expo SDK 57 to match Expo Go 57:
 
    ```powershell
    npx expo start --go --clear
@@ -38,6 +39,12 @@ Expo + React Native + TypeScript app, kept separate from the backend under
    support the SDK version used by this project. If Expo Go still shows the old
    error, fully close Expo Go, restart this command, and scan the newly printed
    QR code.
+
+For Google Maps tiles and the traffic layer, add platform-restricted
+`GOOGLE_MAPS_ANDROID_API_KEY` and `GOOGLE_MAPS_IOS_API_KEY` values to the
+local build environment, then create a new native development build. These
+are Maps SDK keys; do not put the backend Google Routes key in the app.
+Enable the Maps SDKs in Google Cloud and use application restrictions.
 
 For an Android emulator or a custom native development build instead, install
 Android Studio and its Android SDK, Build-Tools, Platform-Tools (`adb`), and
@@ -77,17 +84,22 @@ and use HTTPS. Never put credentials in `EXPO_PUBLIC_*` variables.
   in Expo SecureStore, automatic refresh after an expired access token.
 - Phone OTP request and verification (the backend still needs a real SMS
   provider for live messages).
-- Passenger server-priced estimates, GPS pickup selection, device place-name
-  destination geocoding, active-ride polling, cancellation, and idempotent cash
-  ride requests. An interactive map and map-tile navigation are not wired.
+- Passenger server-priced estimates, map-first booking with draggable/tappable
+  pickup and destination points, route distance/ETA, Google Maps traffic when
+  configured, active-ride map, and a fresh assigned-driver marker. The driver
+  app posts location every five seconds during an active ride while it is open;
+  the passenger refreshes ride details every five seconds. Otherwise the map
+  falls back to OpenStreetMap and the backend's configured routing service.
+  Device place-name destination geocoding, cancellation, and idempotent cash
+  ride requests are also supported.
 - Guided driver setup for licence details, vehicle details, administrator
   review, chassis/engine metadata, foreground GPS availability, and ride offer
   lifecycle controls after approval. Secure document image upload is not wired.
 - API origin editor for emulator or physical Android device.
 
 Drivers share foreground GPS while the app is open; background tracking,
-push, an interactive live map, online payment, and full in-trip socket
-navigation remain future work.
+push notifications, continuous turn-by-turn navigation, online payment, and
+multi-instance realtime scaling remain future work.
 
 ## Checks
 

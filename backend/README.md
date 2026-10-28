@@ -60,6 +60,71 @@ If using a local PostgreSQL installation, install the matching PostGIS
 extension package (for Windows, use StackBuilder for that PostgreSQL version)
 before running migrations.
 
+### Local OSRM routing with WSL
+
+The API includes an OSRM client. To run a local Pakistan routing server, use
+Ubuntu under WSL. Install Docker Engine and Compose in Ubuntu (Docker Desktop
+is not required). The Pakistan map extract and generated OSRM files are large
+and are ignored by Git.
+
+In Ubuntu, install Docker if it is not installed:
+
+```bash
+sudo apt update
+sudo apt install -y docker.io docker-compose-v2
+sudo systemctl enable --now docker
+```
+
+From the repository's `backend` directory, run:
+
+```bash
+set -e
+mkdir -p docker/osrm/data
+curl -fL https://download.geofabrik.de/asia/pakistan-latest.osm.pbf \
+  -o docker/osrm/data/pakistan-latest.osm.pbf
+sudo docker run --rm -t \
+  -v "$PWD/docker/osrm/data:/data" \
+  osrm/osrm-backend:v5.25.0 \
+  osrm-extract -p /opt/car.lua /data/pakistan-latest.osm.pbf
+sudo docker run --rm -t \
+  -v "$PWD/docker/osrm/data:/data" \
+  osrm/osrm-backend:v5.25.0 \
+  osrm-partition /data/pakistan-latest.osrm
+sudo docker run --rm -t \
+  -v "$PWD/docker/osrm/data:/data" \
+  osrm/osrm-backend:v5.25.0 \
+  osrm-customize /data/pakistan-latest.osrm
+sudo docker compose --profile routing up -d osrm
+```
+
+Processing the full Pakistan map can take a while and needs sufficient Docker
+memory and free disk space.
+
+In the backend directory's `.env` file (repo path `backend/.env`), set these
+values. Replace existing routing values rather than adding duplicate keys;
+the file must contain environment assignments, not shell commands:
+
+```dotenv
+ROUTING_PROVIDER=osrm
+ROUTING_BASE_URL=http://localhost:5000
+```
+
+Check the router from Ubuntu with
+`curl "http://localhost:5000/route/v1/driving/67.001,24.86;67.03,24.88?overview=false"`.
+Expect JSON with `"code":"Ok"` and a route distance in meters. Restart the
+backend after changing `.env`. To stop the router, run
+`sudo docker compose --profile routing stop osrm`. The default development provider
+remains a marked straight-line estimate; OSRM is only used when explicitly
+configured. After a Windows restart, open Ubuntu to start its systemd Docker
+daemon and the `unless-stopped` OSRM container.
+
+For Google traffic-aware routes instead, enable billing and the Routes API in
+Google Cloud, create a restricted server key, then set
+`ROUTING_PROVIDER=google_maps` and `GOOGLE_ROUTES_API_KEY` in `backend/.env`.
+The server key must stay private and must not be copied into the mobile app.
+Set Google Cloud quotas and budget alerts before testing; the mobile Google Maps
+SDK keys are separate credentials.
+
 Generate a local signing secret in PowerShell:
 
 ```powershell
@@ -107,6 +172,17 @@ npm run migration:show
 npm run migration:run
 ```
 
+Ride estimates and requests support routes up to 1,400 km by default. Set
+`RIDE_MAX_DISTANCE_KM` in `.env` to change the server-side limit. The admin
+Fare settings page manages separate Economy, Comfort, and XL car rates, plus
+independent bike and rickshaw rates. Car distance fares use the
+current manually entered petrol price and class fuel efficiency:
+`fuel price per litre / km per litre + other cost per km`. Set a positive
+current petrol price in Admin before requesting car fare estimates. Initial
+fuel-efficiency values (12 km/L Economy, 10 Comfort, 8 XL) are examples and
+should be adjusted to match the fleet. Bike and rickshaw start at the existing
+shared rates until an administrator changes them.
+
 PostGIS is installed and enabled by the PostgreSQL initialization script.
 Create the first privileged account only through the explicit one-time CLI:
 
@@ -147,7 +223,7 @@ dashboard reviews submitted metadata only; it does not receive private document
 images. In
 development, set `OTP_DEV_RETURN_CODE=true` to include the code in the OTP
 response. This flag is rejected in production. The development routing provider
-is a marked straight-line approximation; production startup requires
-`ROUTING_PROVIDER=osrm` and `ROUTING_BASE_URL`. Integrate and validate real
-providers before enabling the service for riders. Starting the application and
-passing readiness checks requires PostgreSQL.
+is a marked straight-line approximation; production startup requires either
+`ROUTING_PROVIDER=osrm` with `ROUTING_BASE_URL`, or `ROUTING_PROVIDER=google_maps`
+with `GOOGLE_ROUTES_API_KEY`. Starting the application and passing readiness
+checks requires PostgreSQL.

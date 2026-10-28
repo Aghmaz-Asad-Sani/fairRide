@@ -21,5 +21,15 @@ services:
       timeout: 3s
       retries: 10
 
+  osrm:
+    image: osrm/osrm-backend:v5.25.0
+    profiles: ["routing"]
+    restart: unless-stopped
+    command: ["osrm-routed", "--algorithm", "mld", "/data/pakistan-latest.osrm"]
+    ports:
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - ./docker/osrm/data:/data:ro
+
 volumes:
   postgres_data:

@@ -5,6 +5,9 @@ const production =
   process.env.EAS_BUILD_PROFILE === "production" ||
   process.env.NODE_ENV === "production";
 
+const googleMapsAndroidApiKey = process.env.GOOGLE_MAPS_ANDROID_API_KEY;
+const googleMapsIosApiKey = process.env.GOOGLE_MAPS_IOS_API_KEY;
+
 const config = {
   name: "FairRide",
   slug: "fairride",
@@ -26,6 +29,17 @@ const config = {
       {
         locationWhenInUsePermission:
           "FairRide uses your location to set ride pickup points and match nearby drivers.",
+      },
+    ],
+    [
+      "react-native-maps",
+      {
+        ...(googleMapsAndroidApiKey
+          ? { androidGoogleMapsApiKey: googleMapsAndroidApiKey }
+          : {}),
+        ...(googleMapsIosApiKey
+          ? { iosGoogleMapsApiKey: googleMapsIosApiKey }
+          : {}),
       },
     ],
     [
@@ -62,6 +76,10 @@ const config = {
   },
   web: {
     favicon: "./assets/favicon.png",
+  },
+  extra: {
+    googleMapsAndroidEnabled: Boolean(googleMapsAndroidApiKey),
+    googleMapsIosEnabled: Boolean(googleMapsIosApiKey),
   },
 } satisfies ExpoConfig & {
   splash: {

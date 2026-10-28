@@ -105,7 +105,10 @@ export default function AuthScreen() {
 
   const isDriver = role === "DRIVER";
   return (
-    <Screen style={styles.screen}>
+    <Screen
+      style={styles.screen}
+      safeAreaEdges={["top", "right", "bottom", "left"]}
+    >
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}

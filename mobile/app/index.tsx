@@ -11,29 +11,23 @@ import {
 } from "react-native";
 import { useSession } from "../src/auth/SessionProvider";
 import {
+  Button,
+  Card,
   fontFamilies,
   LoadingView,
+  Notice,
   Screen,
   colors,
+  uiStyles,
 } from "../src/components/ui";
 
 export default function WelcomeScreen() {
-  const { user, isLoading } = useSession();
+  const { user, isLoading, signOut } = useSession();
   const [showSplash, setShowSplash] = useState(true);
+  const [signingOut, setSigningOut] = useState(false);
+  const [error, setError] = useState("");
   const [splashScale] = useState(() => new Animated.Value(0.92));
   const [splashOpacity] = useState(() => new Animated.Value(0));
-
-  useEffect(() => {
-    if (!isLoading && user) {
-      router.replace(
-        user.phoneVerified
-          ? user.role === "DRIVER"
-            ? "/driver"
-            : "/home"
-          : "/otp",
-      );
-    }
-  }, [isLoading, user]);
 
   useEffect(() => {
     if (isLoading || user || !showSplash) return;
@@ -61,11 +55,13 @@ export default function WelcomeScreen() {
   }, [isLoading, user, showSplash, splashOpacity, splashScale]);
 
   if (isLoading) return <LoadingView />;
-  if (user) return <LoadingView label="Opening your FairRide account…" />;
 
-  if (showSplash) {
+  if (showSplash && !user) {
     return (
-      <Screen style={styles.splashScreen}>
+      <Screen
+        style={styles.splashScreen}
+        safeAreaEdges={["top", "right", "bottom", "left"]}
+      >
         <View style={styles.splashHalo} />
         <Animated.View
           style={[
@@ -99,7 +95,10 @@ export default function WelcomeScreen() {
   }
 
   return (
-    <Screen style={styles.screen}>
+    <Screen
+      style={styles.screen}
+      safeAreaEdges={["top", "right", "bottom", "left"]}
+    >
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -145,44 +144,121 @@ export default function WelcomeScreen() {
         </View>
 
         <View style={styles.intro}>
-          <Text style={styles.eyebrow}>GOOD TO GO?</Text>
+          <Text style={styles.eyebrow}>
+            {user ? "WELCOME BACK" : "GOOD TO GO?"}
+          </Text>
           <Text style={styles.title}>
-            Move through your day,{"\n"}your way.
+            {user ? (
+              `Welcome back, ${user.name.split(" ")[0]}.`
+            ) : (
+              <>
+                Move through your day,{"\n"}your way.
+              </>
+            )}
           </Text>
           <Text style={styles.subtitle}>
-            A smoother ride for you, and a fairer road for every driver.
+            {user
+              ? "Continue to your account, or sign out to choose another account."
+              : "A smoother ride for you, and a fairer road for every driver."}
           </Text>
         </View>
 
-        <View style={styles.choices}>
-          <RoleChoice
-            title="I’m a passenger"
-            detail="Find a ride around you"
-            icon={require("../assets/icons/person.png")}
-            passenger
-            onPress={() =>
-              router.push({
-                pathname: "/onboarding",
-                params: { role: "PASSENGER" },
-              })
-            }
-          />
-          <RoleChoice
-            title="I’m a driver"
-            detail="Drive, earn, and grow"
-            icon={require("../assets/icons/target.png")}
-            onPress={() =>
-              router.push({
-                pathname: "/onboarding",
-                params: { role: "DRIVER" },
-              })
-            }
-          />
-        </View>
-
-        <Text style={styles.footerText}>
-          Choose your journey to get started
-        </Text>
+        {user ? (
+          <Card>
+            <Text style={uiStyles.sectionTitle}>
+              Signed in as {user.role === "DRIVER" ? "Driver" : "Passenger"}
+            </Text>
+            <Text style={[uiStyles.body, { marginTop: 5, marginBottom: 12 }]}>
+              {user.name} · {user.phone}
+            </Text>
+            {error ? <Notice message={error} error /> : null}
+            <Button
+              title="Continue to my account"
+              onPress={() =>
+                router.replace(
+                  user.phoneVerified
+                    ? user.role === "DRIVER"
+                      ? "/driver"
+                      : "/home"
+                    : "/otp",
+                )
+              }
+            />
+            <Button
+              title="Sign out and switch account"
+              secondary
+              busy={signingOut}
+              onPress={() => {
+                setSigningOut(true);
+                setError("");
+                void signOut()
+                  .then(() => setShowSplash(false))
+                  .catch(() => {
+                    setError(
+                      "Signed out on this device, but the server could not be reached to end the remote session.",
+                    );
+                    setShowSplash(false);
+                  })
+                  .finally(() => setSigningOut(false));
+              }}
+            />
+          </Card>
+        ) : (
+          <>
+            <View style={styles.choices}>
+              <RoleChoice
+                title="I’m a passenger"
+                detail="Find a ride around you"
+                icon={require("../assets/icons/person.png")}
+                passenger
+                onPress={() =>
+                  router.push({
+                    pathname: "/onboarding",
+                    params: { role: "PASSENGER" },
+                  })
+                }
+              />
+              <RoleChoice
+                title="I’m a driver"
+                detail="Drive, earn, and grow"
+                icon={require("../assets/icons/target.png")}
+                onPress={() =>
+                  router.push({
+                    pathname: "/onboarding",
+                    params: { role: "DRIVER" },
+                  })
+                }
+              />
+            </View>
+            <View style={styles.signInLinks}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() =>
+                  router.push({
+                    pathname: "/auth",
+                    params: { role: "PASSENGER", mode: "login" },
+                  })
+                }
+              >
+                <Text style={styles.signInText}>Passenger sign in</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() =>
+                  router.push({
+                    pathname: "/auth",
+                    params: { role: "DRIVER", mode: "login" },
+                  })
+                }
+              >
+                <Text style={styles.signInText}>Driver sign in</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.footerText}>
+              Choose your journey to get started
+            </Text>
+          </>
+        )}
       </ScrollView>
     </Screen>
   );
@@ -441,6 +517,17 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.regular,
   },
   choices: { gap: 9 },
+  signInLinks: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 4,
+    paddingTop: 13,
+  },
+  signInText: {
+    color: colors.primary,
+    fontSize: 13,
+    fontFamily: fontFamilies.bold,
+  },
   choice: {
     minHeight: 68,
     flexDirection: "row",

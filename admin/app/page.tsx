@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 
-type Tab = "overview" | "drivers" | "accounts" | "rides" | "pricing";
+type Tab = "overview" | "drivers" | "passengers" | "rides" | "pricing";
 type UserStatus = "ACTIVE" | "SUSPENDED" | "DELETION_REQUESTED";
 type VerifyStatus = "PENDING" | "APPROVED" | "REJECTED";
 
@@ -36,7 +36,15 @@ interface AdminDriver {
   verificationStatus: VerifyStatus;
   licenseNumber: string;
   licenseExpiry: string;
-  user: { name: string; phone: string; email: string | null; status: UserStatus };
+  identityVerified: boolean;
+  isOnline: boolean;
+  isAvailable: boolean;
+  user: {
+    name: string;
+    phone: string;
+    email: string | null;
+    status: UserStatus;
+  };
   vehicles: AdminVehicle[];
 }
 
@@ -65,17 +73,66 @@ interface Page<T> {
 
 interface Overview {
   totalUsers: number;
+  totalPassengers: number;
+  newPassengers30d: number;
+  activePassengers: number;
+  verifiedPassengers: number;
+  totalDrivers: number;
+  newDrivers30d: number;
+  activeDrivers: number;
+  onlineDrivers: number;
   activeRides: number;
   completedRides: number;
+  rideRequests30d: number;
+  completedRides30d: number;
+  cancelledRides30d: number;
+  fareRevenuePaisa30d: number;
+  averageFarePaisa30d: number;
   pendingDrivers: number;
   pendingVehicles: number;
 }
 
-interface Pricing {
+interface AdminRideHistory extends Page<AdminRide> {
+  totalRides: number;
+  completedRides: number;
+  cancelledRides: number;
+}
+
+interface RideHistoryTarget {
+  id: string;
+  name: string;
+  role: string;
+}
+
+interface PricingSettings {
+  fuelPricePaisaPerLiter: number;
+  economyFuelEfficiencyKmPerLiter: number;
   baseFarePaisa: number;
   perKmFarePaisa: number;
   perMinuteFarePaisa: number;
   minimumFarePaisa: number;
+  comfortFuelEfficiencyKmPerLiter: number;
+  comfortBaseFarePaisa: number;
+  comfortPerKmFarePaisa: number;
+  comfortPerMinuteFarePaisa: number;
+  comfortMinimumFarePaisa: number;
+  xlFuelEfficiencyKmPerLiter: number;
+  xlBaseFarePaisa: number;
+  xlPerKmFarePaisa: number;
+  xlPerMinuteFarePaisa: number;
+  xlMinimumFarePaisa: number;
+  bikeBaseFarePaisa: number;
+  bikePerKmFarePaisa: number;
+  bikePerMinuteFarePaisa: number;
+  bikeMinimumFarePaisa: number;
+  rickshawBaseFarePaisa: number;
+  rickshawPerKmFarePaisa: number;
+  rickshawPerMinuteFarePaisa: number;
+  rickshawMinimumFarePaisa: number;
+}
+
+interface Pricing extends PricingSettings {
+  updatedAt: string | null;
 }
 
 interface Session {
@@ -84,15 +141,17 @@ interface Session {
   user: { role: string; name: string };
 }
 
-const apiOrigin = (process.env.NEXT_PUBLIC_API_ORIGIN || "http://localhost:3000")
+const apiOrigin = (
+  process.env.NEXT_PUBLIC_API_ORIGIN || "http://localhost:3000"
+)
   .trim()
   .replace(/\/+$/, "")
   .replace(/\/api\/v1$/, "");
 const apiBase = `${apiOrigin}/api/v1`;
 const tabs: { key: Tab; label: string }[] = [
   { key: "overview", label: "Overview" },
-  { key: "drivers", label: "Driver reviews" },
-  { key: "accounts", label: "Accounts" },
+  { key: "passengers", label: "Passengers" },
+  { key: "drivers", label: "Driver management" },
   { key: "rides", label: "Rides" },
   { key: "pricing", label: "Fare settings" },
 ];
@@ -208,10 +267,20 @@ export default function AdminPage() {
   const [accounts, setAccounts] = useState<AdminUser[]>([]);
   const [rides, setRides] = useState<AdminRide[]>([]);
   const [pricing, setPricing] = useState<Pricing | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<RideHistoryTarget | null>(
+    null,
+  );
+  const [rideHistory, setRideHistory] = useState<AdminRideHistory | null>(null);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyBusy, setHistoryBusy] = useState(false);
   const [search, setSearch] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
+  const [pagination, setPagination] = useState({
+    page: 1,
+    totalPages: 1,
+    total: 0,
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -222,44 +291,104 @@ export default function AdminPage() {
       setError("");
       try {
         if (selected === "overview") {
-          setOverview(await request<Overview>("/admin/overview", active.accessToken));
+          setOverview(
+            await request<Overview>("/admin/overview", active.accessToken),
+          );
         } else if (selected === "drivers") {
-          const query = new URLSearchParams({ page: String(page), pageSize: "50" });
+          const query = new URLSearchParams({
+            page: String(page),
+            pageSize: "50",
+          });
           if (searchQuery) query.set("q", searchQuery);
           const result = await request<Page<AdminDriver>>(
-              `/admin/drivers?${query}`,
-              active.accessToken,
-            );
+            `/admin/drivers?${query}`,
+            active.accessToken,
+          );
           setDrivers(result.items);
-          setPagination({ page: result.page, totalPages: result.totalPages, total: result.total });
-        } else if (selected === "accounts") {
-          const query = new URLSearchParams({ page: String(page), pageSize: "50" });
+          setPagination({
+            page: result.page,
+            totalPages: result.totalPages,
+            total: result.total,
+          });
+        } else if (selected === "passengers") {
+          const query = new URLSearchParams({
+            page: String(page),
+            pageSize: "50",
+          });
+          query.set("role", "PASSENGER");
           if (searchQuery) query.set("q", searchQuery);
           const result = await request<Page<AdminUser>>(
-              `/admin/users?${query}`,
-              active.accessToken,
-            );
+            `/admin/users?${query}`,
+            active.accessToken,
+          );
           setAccounts(result.items);
-          setPagination({ page: result.page, totalPages: result.totalPages, total: result.total });
+          setPagination({
+            page: result.page,
+            totalPages: result.totalPages,
+            total: result.total,
+          });
         } else if (selected === "rides") {
-          const query = new URLSearchParams({ page: String(page), pageSize: "50" });
+          const query = new URLSearchParams({
+            page: String(page),
+            pageSize: "50",
+          });
           if (searchQuery) query.set("q", searchQuery);
           const result = await request<Page<AdminRide>>(
-              `/admin/rides?${query}`,
-              active.accessToken,
-            );
+            `/admin/rides?${query}`,
+            active.accessToken,
+          );
           setRides(result.items);
-          setPagination({ page: result.page, totalPages: result.totalPages, total: result.total });
+          setPagination({
+            page: result.page,
+            totalPages: result.totalPages,
+            total: result.total,
+          });
         } else {
-          setPricing(await request<Pricing>("/admin/pricing", active.accessToken));
+          setPricing(
+            await request<Pricing>("/admin/pricing", active.accessToken),
+          );
         }
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "Could not load data.");
+        setError(
+          cause instanceof Error ? cause.message : "Could not load data.",
+        );
       } finally {
         setBusy(false);
       }
     },
     [page, searchQuery],
+  );
+
+  const loadRideHistory = useCallback(
+    async (
+      target: RideHistoryTarget,
+      active: Session,
+      selectedPage: number,
+    ) => {
+      setHistoryBusy(true);
+      setError("");
+      try {
+        const query = new URLSearchParams({
+          page: String(selectedPage),
+          pageSize: "10",
+        });
+        setRideHistory(
+          await request<AdminRideHistory>(
+            `/admin/users/${target.id}/rides?${query}`,
+            active.accessToken,
+          ),
+        );
+      } catch (cause) {
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Could not load this account's ride history.",
+        );
+      } finally {
+        setHistoryBusy(false);
+      }
+    },
+    [],
   );
 
   useEffect(() => {
@@ -293,6 +422,18 @@ export default function AdminPage() {
     if (session) void loadTab(tab, session);
   }, [session, tab, loadTab]);
 
+  useEffect(() => {
+    if (session && historyTarget) {
+      void loadRideHistory(historyTarget, session, historyPage);
+    }
+  }, [session, historyTarget, historyPage, loadRideHistory]);
+
+  function openRideHistory(target: RideHistoryTarget) {
+    setHistoryTarget(target);
+    setRideHistory(null);
+    setHistoryPage(1);
+  }
+
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -324,7 +465,9 @@ export default function AdminPage() {
       }
       const auth = data as Session;
       if (auth.user.role !== "SUPER_ADMIN") {
-        throw new Error("This account is not authorized for the admin dashboard.");
+        throw new Error(
+          "This account is not authorized for the admin dashboard.",
+        );
       }
       const adminSession: Session = {
         accessToken: auth.accessToken,
@@ -370,12 +513,33 @@ export default function AdminPage() {
           <div className="brandMark">F</div>
           <p className="eyebrow">FAIRRIDE OPERATIONS</p>
           <h1>Admin sign in</h1>
-          <p className="muted">Use an existing SUPER_ADMIN account. Admin sign-up is disabled.</p>
+          <p className="muted">
+            Use an existing SUPER_ADMIN account. Admin sign-up is disabled.
+          </p>
           {error ? <p className="message error">{error}</p> : null}
           <form onSubmit={signIn}>
-            <label>Email or phone<input required autoComplete="username" value={identifier} onChange={(e) => setIdentifier(e.target.value)} /></label>
-            <label>Password<input required type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
-            <button className="primaryButton full" disabled={busy}>{busy ? "Signing in…" : "Sign in securely"}</button>
+            <label>
+              Email or phone
+              <input
+                required
+                autoComplete="username"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+              />
+            </label>
+            <label>
+              Password
+              <input
+                required
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </label>
+            <button className="primaryButton full" disabled={busy}>
+              {busy ? "Signing in…" : "Sign in securely"}
+            </button>
           </form>
           <p className="tiny">API: {apiOrigin}</p>
         </section>
@@ -386,93 +550,754 @@ export default function AdminPage() {
   return (
     <main className="shell">
       <aside className="sidebar">
-        <div className="brand"><span className="brandMark">F</span><span>FairRide<small>ADMIN</small></span></div>
+        <div className="brand">
+          <span className="brandMark">F</span>
+          <span>
+            FairRide<small>ADMIN</small>
+          </span>
+        </div>
         <nav aria-label="Admin sections">
           {tabs.map((item) => (
-            <button key={item.key} className={tab === item.key ? "navItem active" : "navItem"} onClick={() => { setTab(item.key); setSearch(""); setSearchQuery(""); setPage(1); }}>
-              <span>{item.label}</span><span className="navArrow">›</span>
+            <button
+              key={item.key}
+              className={tab === item.key ? "navItem active" : "navItem"}
+              onClick={() => {
+                setTab(item.key);
+                setSearch("");
+                setSearchQuery("");
+                setPage(1);
+              }}
+            >
+              <span>{item.label}</span>
+              <span className="navArrow">›</span>
             </button>
           ))}
         </nav>
         <div className="sideFoot">
-          <div className="userBadge">{session.user.name.slice(0, 1).toUpperCase()}</div>
-          <div className="sideUser"><strong>{session.user.name}</strong><small>Super admin</small></div>
-          <button className="logout" onClick={() => { sessionStorage.removeItem("fairride-admin-session"); setSession(null); }}>Log out</button>
+          <div className="userBadge">
+            {session.user.name.slice(0, 1).toUpperCase()}
+          </div>
+          <div className="sideUser">
+            <strong>{session.user.name}</strong>
+            <small>Super admin</small>
+          </div>
+          <button
+            className="logout"
+            onClick={() => {
+              sessionStorage.removeItem("fairride-admin-session");
+              setSession(null);
+            }}
+          >
+            Log out
+          </button>
         </div>
       </aside>
       <section className="workspace">
         <header className="topbar">
-          <div><p className="eyebrow">FAIRRIDE / OPERATIONS</p><h1>{tabs.find((item) => item.key === tab)?.label}</h1></div>
-          <button className="quietButton" onClick={() => void loadTab(tab, session)} disabled={busy}>{busy ? "Loading…" : "Refresh data"}</button>
+          <div>
+            <p className="eyebrow">FAIRRIDE / OPERATIONS</p>
+            <h1>{tabs.find((item) => item.key === tab)?.label}</h1>
+          </div>
+          <button
+            className="quietButton"
+            onClick={() => void loadTab(tab, session)}
+            disabled={busy}
+          >
+            {busy ? "Loading…" : "Refresh data"}
+          </button>
         </header>
         {error ? <p className="message error">{error}</p> : null}
         {notice ? <p className="message success">{notice}</p> : null}
         {tab === "overview" && overview ? (
-          <div className="metricsGrid">
-            {[
-              ["Total accounts", overview.totalUsers, "Passenger and driver accounts"],
-              ["Active rides", overview.activeRides, "Searching or currently in progress"],
-              ["Completed rides", overview.completedRides, "All-time completed trips"],
-              ["Drivers to review", overview.pendingDrivers, "Waiting for admin decision"],
-              ["Vehicles to review", overview.pendingVehicles, "Waiting for admin decision"],
-            ].map(([title, value, detail]) => <article className="metricCard" key={title}><p>{title}</p><strong>{value}</strong><small>{detail}</small></article>)}
+          <div className="analytics">
+            <AnalyticsGroup
+              title="Passenger analytics"
+              metrics={[
+                [
+                  "Passengers",
+                  overview.totalPassengers,
+                  "All registered passenger accounts",
+                ],
+                [
+                  "New passengers",
+                  overview.newPassengers30d,
+                  "Registered in the last 30 days",
+                ],
+                [
+                  "Active passengers",
+                  overview.activePassengers,
+                  "Accounts currently active",
+                ],
+                [
+                  "Phone verified",
+                  overview.verifiedPassengers,
+                  "Passenger accounts with verified phones",
+                ],
+              ]}
+            />
+            <AnalyticsGroup
+              title="Driver analytics"
+              metrics={[
+                [
+                  "Drivers",
+                  overview.totalDrivers,
+                  "All registered driver accounts",
+                ],
+                [
+                  "New drivers",
+                  overview.newDrivers30d,
+                  "Registered in the last 30 days",
+                ],
+                [
+                  "Active drivers",
+                  overview.activeDrivers,
+                  "Accounts currently active",
+                ],
+                [
+                  "Online drivers",
+                  overview.onlineDrivers,
+                  "Currently online in the driver app",
+                ],
+                [
+                  "Drivers to review",
+                  overview.pendingDrivers,
+                  "Waiting for admin decision",
+                ],
+                [
+                  "Vehicles to review",
+                  overview.pendingVehicles,
+                  "Waiting for admin decision",
+                ],
+              ]}
+            />
+            <AnalyticsGroup
+              title="Ride and fare analytics"
+              metrics={[
+                [
+                  "Ride requests",
+                  overview.rideRequests30d,
+                  "Requested in the last 30 days",
+                ],
+                [
+                  "Completed trips",
+                  overview.completedRides30d,
+                  "Completed in the last 30 days",
+                ],
+                [
+                  "Cancelled trips",
+                  overview.cancelledRides30d,
+                  "Cancelled in the last 30 days",
+                ],
+                [
+                  "Fare total",
+                  `PKR ${(overview.fareRevenuePaisa30d / 100).toLocaleString()}`,
+                  "Completed-trip fares, last 30 days",
+                ],
+                [
+                  "Average fare",
+                  `PKR ${(overview.averageFarePaisa30d / 100).toFixed(2)}`,
+                  "Per completed trip, last 30 days",
+                ],
+                [
+                  "Active rides",
+                  overview.activeRides,
+                  "Searching or currently in progress",
+                ],
+                [
+                  "Completed rides",
+                  overview.completedRides,
+                  "All-time completed trips",
+                ],
+                [
+                  "Total accounts",
+                  overview.totalUsers,
+                  "Includes administrative accounts",
+                ],
+              ]}
+            />
           </div>
         ) : null}
         {tab === "drivers" ? (
           <>
-            <div className="toolbar"><p className="muted">Review driver licence details and registered vehicles. Document image uploads are not connected yet.</p><Search value={search} onChange={setSearch} onSearch={() => { setPage(1); setSearchQuery(search.trim()); }} /></div>
+            <div className="toolbar">
+              <p className="muted">
+                Review driver licence details and registered vehicles. Document
+                image uploads are not connected yet.
+              </p>
+              <Search
+                value={search}
+                onChange={setSearch}
+                onSearch={() => {
+                  setPage(1);
+                  setSearchQuery(search.trim());
+                }}
+              />
+            </div>
             <div className="reviewList">
-              {drivers.map((driver) => <article className="reviewCard" key={driver.userId}>
-                <div className="reviewHead"><div><h2>{driver.user.name}</h2><p>{driver.user.phone} · Driver {driver.verificationStatus.toLowerCase()}</p></div><Status value={driver.verificationStatus} /></div>
-                <div className="detailGrid"><span>Licence <strong>{driver.licenseNumber}</strong></span><span>Expires <strong>{driver.licenseExpiry}</strong></span><span>Account <strong>{driver.user.status}</strong></span></div>
-                {driver.vehicles.map((vehicle) => <div className="vehicleBox" key={vehicle.id}>
-                  <div className="reviewHead"><div><h3>{vehicle.make} {vehicle.model} · {vehicle.vehicleType}</h3><p>{vehicle.registrationNumber} · {vehicle.category}</p></div><Status value={vehicle.verificationStatus} /></div>
-                  <div className="detailGrid"><span>Chassis <strong>{vehicle.chassisNumber || "Not provided"}</strong></span><span>Engine <strong>{vehicle.engineNumber || "Not provided"}</strong></span><span>Document expiry <strong>{vehicle.documentExpiresAt}</strong></span></div>
-                  <div className="actions">
-                    {vehicle.verificationStatus !== "APPROVED" ? <button className="primaryButton" disabled={busy} onClick={() => void mutate(`/admin/vehicles/${vehicle.id}/verification`, { status: "APPROVED" }, "Vehicle approved.")}>Approve vehicle</button> : null}
-                    {vehicle.verificationStatus !== "REJECTED" ? <button className="dangerButton" disabled={busy} onClick={() => void mutate(`/admin/vehicles/${vehicle.id}/verification`, { status: "REJECTED" }, "Vehicle rejected.")}>Reject</button> : null}
+              {drivers.map((driver) => (
+                <article className="reviewCard" key={driver.userId}>
+                  <div className="reviewHead">
+                    <div>
+                      <h2>{driver.user.name}</h2>
+                      <p>
+                        {driver.user.phone} · Driver{" "}
+                        {driver.verificationStatus.toLowerCase()}
+                      </p>
+                    </div>
+                    <Status value={driver.verificationStatus} />
                   </div>
-                </div>)}
-                <div className="actions">
-                  {driver.verificationStatus !== "APPROVED" ? <button className="primaryButton" disabled={busy} onClick={() => void mutate(`/admin/drivers/${driver.userId}/verification`, { status: "APPROVED" }, "Driver approved.")}>Approve driver</button> : null}
-                  {driver.verificationStatus !== "REJECTED" ? <button className="dangerButton" disabled={busy} onClick={() => void mutate(`/admin/drivers/${driver.userId}/verification`, { status: "REJECTED" }, "Driver rejected.")}>Reject</button> : null}
-                </div>
-              </article>)}
-              {!drivers.length && !busy ? <Empty>No driver reviews match this search.</Empty> : null}
+                  <div className="detailGrid">
+                    <span>
+                      Licence <strong>{driver.licenseNumber}</strong>
+                    </span>
+                    <span>
+                      Expires <strong>{driver.licenseExpiry}</strong>
+                    </span>
+                    <span>
+                      Account <strong>{driver.user.status}</strong>
+                    </span>
+                    <span>
+                      Availability{" "}
+                      <strong>
+                        {driver.isOnline
+                          ? driver.isAvailable
+                            ? "Online · accepting rides"
+                            : "Online · unavailable"
+                          : "Offline"}
+                      </strong>
+                    </span>
+                    <span>
+                      Identity check{" "}
+                      <strong>
+                        {driver.identityVerified ? "Verified" : "Pending"}
+                      </strong>
+                    </span>
+                  </div>
+                  {driver.vehicles.map((vehicle) => (
+                    <div className="vehicleBox" key={vehicle.id}>
+                      <div className="reviewHead">
+                        <div>
+                          <h3>
+                            {vehicle.make} {vehicle.model} ·{" "}
+                            {vehicle.vehicleType}
+                          </h3>
+                          <p>
+                            {vehicle.registrationNumber} · {vehicle.category}
+                          </p>
+                        </div>
+                        <Status value={vehicle.verificationStatus} />
+                      </div>
+                      <div className="detailGrid">
+                        <span>
+                          Chassis{" "}
+                          <strong>
+                            {vehicle.chassisNumber || "Not provided"}
+                          </strong>
+                        </span>
+                        <span>
+                          Engine{" "}
+                          <strong>
+                            {vehicle.engineNumber || "Not provided"}
+                          </strong>
+                        </span>
+                        <span>
+                          Document expiry{" "}
+                          <strong>{vehicle.documentExpiresAt}</strong>
+                        </span>
+                      </div>
+                      <div className="actions">
+                        {vehicle.verificationStatus !== "APPROVED" ? (
+                          <button
+                            className="primaryButton"
+                            disabled={busy}
+                            onClick={() =>
+                              void mutate(
+                                `/admin/vehicles/${vehicle.id}/verification`,
+                                { status: "APPROVED" },
+                                "Vehicle approved.",
+                              )
+                            }
+                          >
+                            Approve vehicle
+                          </button>
+                        ) : null}
+                        {vehicle.verificationStatus !== "REJECTED" ? (
+                          <button
+                            className="dangerButton"
+                            disabled={busy}
+                            onClick={() =>
+                              void mutate(
+                                `/admin/vehicles/${vehicle.id}/verification`,
+                                { status: "REJECTED" },
+                                "Vehicle rejected.",
+                              )
+                            }
+                          >
+                            Reject
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                  <div className="actions">
+                    {driver.verificationStatus !== "APPROVED" ? (
+                      <button
+                        className="primaryButton"
+                        disabled={busy}
+                        onClick={() =>
+                          void mutate(
+                            `/admin/drivers/${driver.userId}/verification`,
+                            { status: "APPROVED" },
+                            "Driver approved.",
+                          )
+                        }
+                      >
+                        Approve driver
+                      </button>
+                    ) : null}
+                    {driver.verificationStatus !== "REJECTED" ? (
+                      <button
+                        className="dangerButton"
+                        disabled={busy}
+                        onClick={() =>
+                          void mutate(
+                            `/admin/drivers/${driver.userId}/verification`,
+                            { status: "REJECTED" },
+                            "Driver rejected.",
+                          )
+                        }
+                      >
+                        Reject
+                      </button>
+                    ) : null}
+                    <button
+                      className="quietButton"
+                      disabled={busy}
+                      onClick={() =>
+                        openRideHistory({
+                          id: driver.userId,
+                          name: driver.user.name,
+                          role: "Driver",
+                        })
+                      }
+                    >
+                      Ride history
+                    </button>
+                    <button
+                      className={
+                        driver.user.status === "ACTIVE"
+                          ? "dangerButton"
+                          : "primaryButton"
+                      }
+                      disabled={
+                        busy || driver.user.status === "DELETION_REQUESTED"
+                      }
+                      onClick={() =>
+                        void mutate(
+                          `/admin/users/${driver.userId}/status`,
+                          {
+                            status:
+                              driver.user.status === "ACTIVE"
+                                ? "SUSPENDED"
+                                : "ACTIVE",
+                          },
+                          `Driver account ${driver.user.status === "ACTIVE" ? "suspended" : "activated"}.`,
+                        )
+                      }
+                    >
+                      {driver.user.status === "ACTIVE"
+                        ? "Suspend account"
+                        : "Activate account"}
+                    </button>
+                  </div>
+                </article>
+              ))}
+              {!drivers.length && !busy ? (
+                <Empty>No driver reviews match this search.</Empty>
+              ) : null}
             </div>
             <Pager value={pagination} onChange={setPage} />
           </>
         ) : null}
-        {tab === "accounts" ? (
+        {tab === "passengers" ? (
           <>
-            <div className="toolbar"><p className="muted">Manage passenger and driver access. Super-admin accounts are protected.</p><Search value={search} onChange={setSearch} onSearch={() => { setPage(1); setSearchQuery(search.trim()); }} /></div>
-            <div className="tableWrap"><table><thead><tr><th>Account</th><th>Role</th><th>Phone</th><th>Status</th><th>Joined</th><th>Action</th></tr></thead><tbody>
-              {accounts.map((account) => <tr key={account.id}><td><strong>{account.name}</strong><small>{account.email || "No email"}</small></td><td>{account.role}</td><td>{account.phone}</td><td><Status value={account.status} /></td><td>{new Date(account.createdAt).toLocaleDateString()}</td><td>{account.role !== "SUPER_ADMIN" ? <button className={account.status === "ACTIVE" ? "dangerButton compact" : "primaryButton compact"} disabled={busy || account.status === "DELETION_REQUESTED"} onClick={() => void mutate(`/admin/users/${account.id}/status`, { status: account.status === "ACTIVE" ? "SUSPENDED" : "ACTIVE" }, `Account ${account.status === "ACTIVE" ? "suspended" : "activated"}.`)}>{account.status === "ACTIVE" ? "Suspend" : "Activate"}</button> : "Protected"}</td></tr>)}
-            </tbody></table>{!accounts.length && !busy ? <Empty>No accounts match this search.</Empty> : null}</div>
+            <div className="toolbar">
+              <p className="muted">
+                Search passenger accounts, review verification status and trip
+                history, or suspend/reactivate access.
+              </p>
+              <Search
+                value={search}
+                onChange={setSearch}
+                onSearch={() => {
+                  setPage(1);
+                  setSearchQuery(search.trim());
+                }}
+              />
+            </div>
+            <div className="tableWrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Passenger</th>
+                    <th>Phone</th>
+                    <th>Phone verification</th>
+                    <th>Status</th>
+                    <th>Joined</th>
+                    <th>Controls</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {accounts.map((account) => (
+                    <tr key={account.id}>
+                      <td>
+                        <strong>{account.name}</strong>
+                        <small>{account.email || "No email"}</small>
+                      </td>
+                      <td>{account.phone}</td>
+                      <td>
+                        <Status
+                          value={
+                            account.phoneVerifiedAt ? "VERIFIED" : "UNVERIFIED"
+                          }
+                        />
+                      </td>
+                      <td>
+                        <Status value={account.status} />
+                      </td>
+                      <td>
+                        {new Date(account.createdAt).toLocaleDateString()}
+                      </td>
+                      <td>
+                        <div className="tableActions">
+                          <button
+                            className="quietButton compact"
+                            disabled={busy}
+                            onClick={() =>
+                              openRideHistory({
+                                id: account.id,
+                                name: account.name,
+                                role: "Passenger",
+                              })
+                            }
+                          >
+                            Ride history
+                          </button>
+                          <button
+                            className={
+                              account.status === "ACTIVE"
+                                ? "dangerButton compact"
+                                : "primaryButton compact"
+                            }
+                            disabled={
+                              busy || account.status === "DELETION_REQUESTED"
+                            }
+                            onClick={() =>
+                              void mutate(
+                                `/admin/users/${account.id}/status`,
+                                {
+                                  status:
+                                    account.status === "ACTIVE"
+                                      ? "SUSPENDED"
+                                      : "ACTIVE",
+                                },
+                                `Passenger ${account.status === "ACTIVE" ? "suspended" : "activated"}.`,
+                              )
+                            }
+                          >
+                            {account.status === "ACTIVE"
+                              ? "Suspend"
+                              : "Activate"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!accounts.length && !busy ? (
+                <Empty>No accounts match this search.</Empty>
+              ) : null}
+            </div>
             <Pager value={pagination} onChange={setPage} />
           </>
         ) : null}
         {tab === "rides" ? (
           <>
-            <div className="toolbar"><p className="muted">Search trip records, route labels and rider names.</p><Search value={search} onChange={setSearch} onSearch={() => { setPage(1); setSearchQuery(search.trim()); }} /></div>
-            <div className="tableWrap"><table><thead><tr><th>Trip</th><th>Route</th><th>Passenger / driver</th><th>Vehicle</th><th>Fare (PKR)</th><th>Matching</th><th>State / action</th><th>Created</th></tr></thead><tbody>
-              {rides.map((ride) => <tr key={ride.id}><td><code>{ride.id.slice(0, 8)}</code></td><td>{ride.pickupLabel}<small>to {ride.destinationLabel}</small></td><td>{ride.passengerName || "—"}<small>{ride.driverName || "No driver assigned"}</small></td><td>{ride.vehicleType}<small>{ride.vehicleCategory}</small></td><td>{((ride.finalFarePaisa ?? ride.estimatedFarePaisa) / 100).toFixed(2)}</td><td>{ride.offersSent}<small>{ride.pendingOffers} pending</small></td><td><Status value={ride.status} />{["SEARCHING", "ACCEPTED", "DRIVER_ARRIVING", "IN_PROGRESS"].includes(ride.status) ? <button className="dangerButton compact" disabled={busy} onClick={() => { if (window.confirm("Cancel this active ride and expire its offers?")) void mutate(`/admin/rides/${ride.id}/cancel`, {}, "Ride cancelled and offers expired."); }}>Cancel trip</button> : null}</td><td>{new Date(ride.createdAt).toLocaleString()}</td></tr>)}
-            </tbody></table>{!rides.length && !busy ? <Empty>No rides match this search.</Empty> : null}</div>
+            <div className="toolbar">
+              <p className="muted">
+                Search trip records, route labels and rider names.
+              </p>
+              <Search
+                value={search}
+                onChange={setSearch}
+                onSearch={() => {
+                  setPage(1);
+                  setSearchQuery(search.trim());
+                }}
+              />
+            </div>
+            <div className="tableWrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Trip</th>
+                    <th>Route</th>
+                    <th>Passenger / driver</th>
+                    <th>Vehicle</th>
+                    <th>Fare (PKR)</th>
+                    <th>Matching</th>
+                    <th>State / action</th>
+                    <th>Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rides.map((ride) => (
+                    <tr key={ride.id}>
+                      <td>
+                        <code>{ride.id.slice(0, 8)}</code>
+                      </td>
+                      <td>
+                        {ride.pickupLabel}
+                        <small>to {ride.destinationLabel}</small>
+                      </td>
+                      <td>
+                        {ride.passengerName || "—"}
+                        <small>{ride.driverName || "No driver assigned"}</small>
+                      </td>
+                      <td>
+                        {ride.vehicleType}
+                        <small>{ride.vehicleCategory}</small>
+                      </td>
+                      <td>
+                        {(
+                          (ride.finalFarePaisa ?? ride.estimatedFarePaisa) / 100
+                        ).toFixed(2)}
+                      </td>
+                      <td>
+                        {ride.offersSent}
+                        <small>{ride.pendingOffers} pending</small>
+                      </td>
+                      <td>
+                        <Status value={ride.status} />
+                        {[
+                          "SEARCHING",
+                          "ACCEPTED",
+                          "DRIVER_ARRIVING",
+                          "IN_PROGRESS",
+                        ].includes(ride.status) ? (
+                          <button
+                            className="dangerButton compact"
+                            disabled={busy}
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  "Cancel this active ride and expire its offers?",
+                                )
+                              )
+                                void mutate(
+                                  `/admin/rides/${ride.id}/cancel`,
+                                  {},
+                                  "Ride cancelled and offers expired.",
+                                );
+                            }}
+                          >
+                            Cancel trip
+                          </button>
+                        ) : null}
+                      </td>
+                      <td>{new Date(ride.createdAt).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!rides.length && !busy ? (
+                <Empty>No rides match this search.</Empty>
+              ) : null}
+            </div>
             <Pager value={pagination} onChange={setPage} />
           </>
         ) : null}
-        {tab === "pricing" && pricing ? <PricingForm pricing={pricing} busy={busy} onSave={(value) => void mutate("/admin/pricing", value, "Fare settings saved. New estimates will use these values.")} /> : null}
+        {tab === "pricing" && pricing ? (
+          <PricingForm
+            pricing={pricing}
+            busy={busy}
+            onSave={(value) =>
+              void mutate(
+                "/admin/pricing",
+                value,
+                "Fare settings saved. New estimates will use these values.",
+              )
+            }
+          />
+        ) : null}
+        {historyTarget ? (
+          <RideHistoryPanel
+            target={historyTarget}
+            history={rideHistory}
+            busy={historyBusy}
+            onPageChange={setHistoryPage}
+            onClose={() => {
+              setHistoryTarget(null);
+              setRideHistory(null);
+            }}
+          />
+        ) : null}
       </section>
     </main>
   );
 }
 
-function Search({ value, onChange, onSearch }: { value: string; onChange: (value: string) => void; onSearch: () => void }) {
-  return <form className="searchForm" onSubmit={(event) => { event.preventDefault(); onSearch(); }}><input value={value} onChange={(event) => onChange(event.target.value)} placeholder="Search…" /><button className="quietButton">Search</button></form>;
+function AnalyticsGroup({
+  title,
+  metrics,
+}: {
+  title: string;
+  metrics: [string, string | number, string][];
+}) {
+  return (
+    <section className="analyticsGroup">
+      <h2>{title}</h2>
+      <div className="metricsGrid">
+        {metrics.map(([label, value, detail]) => (
+          <article className="metricCard" key={label}>
+            <p>{label}</p>
+            <strong>
+              {typeof value === "number" ? value.toLocaleString() : value}
+            </strong>
+            <small>{detail}</small>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function RideHistoryPanel({
+  target,
+  history,
+  busy,
+  onPageChange,
+  onClose,
+}: {
+  target: RideHistoryTarget;
+  history: AdminRideHistory | null;
+  busy: boolean;
+  onPageChange: (page: number) => void;
+  onClose: () => void;
+}) {
+  return (
+    <section className="historyPanel">
+      <div className="historyHeader">
+        <div>
+          <p className="eyebrow">{target.role.toUpperCase()} ACCOUNT</p>
+          <h2>{target.name} · Ride history</h2>
+          {history ? (
+            <p className="muted">
+              {history.totalRides} trips · {history.completedRides} completed ·{" "}
+              {history.cancelledRides} cancelled
+            </p>
+          ) : null}
+        </div>
+        <button className="quietButton" onClick={onClose}>
+          Close
+        </button>
+      </div>
+      {busy ? <p className="muted">Loading ride history…</p> : null}
+      {history && !history.items.length ? (
+        <Empty>No ride history for this account yet.</Empty>
+      ) : null}
+      {history && history.items.length ? (
+        <>
+          <div className="tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Trip</th>
+                  <th>Route</th>
+                  <th>Passenger / driver</th>
+                  <th>Status</th>
+                  <th>Fare</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.items.map((ride) => (
+                  <tr key={ride.id}>
+                    <td>
+                      <code>{ride.id.slice(0, 8)}</code>
+                    </td>
+                    <td>
+                      {ride.pickupLabel}
+                      <small>to {ride.destinationLabel}</small>
+                    </td>
+                    <td>
+                      {ride.passengerName || "—"}
+                      <small>{ride.driverName || "No driver assigned"}</small>
+                    </td>
+                    <td>
+                      <Status value={ride.status} />
+                    </td>
+                    <td>
+                      PKR{" "}
+                      {(
+                        (ride.finalFarePaisa ?? ride.estimatedFarePaisa) / 100
+                      ).toFixed(2)}
+                    </td>
+                    <td>{new Date(ride.createdAt).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Pager
+            value={{
+              page: history.page,
+              totalPages: history.totalPages,
+              total: history.total,
+            }}
+            onChange={onPageChange}
+          />
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+function Search({
+  value,
+  onChange,
+  onSearch,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onSearch: () => void;
+}) {
+  return (
+    <form
+      className="searchForm"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSearch();
+      }}
+    >
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Search…"
+      />
+      <button className="quietButton">Search</button>
+    </form>
+  );
 }
 
 function Status({ value }: { value: string }) {
-  const kind = value === "APPROVED" || value === "ACTIVE" || value === "COMPLETED" ? "good" : value === "REJECTED" || value === "SUSPENDED" || value === "CANCELLED" ? "bad" : "pending";
+  const kind =
+    value === "APPROVED" || value === "ACTIVE" || value === "COMPLETED"
+      ? "good"
+      : value === "REJECTED" || value === "SUSPENDED" || value === "CANCELLED"
+        ? "bad"
+        : "pending";
   return <span className={`status ${kind}`}>{value.replaceAll("_", " ")}</span>;
 }
 
@@ -489,23 +1314,214 @@ function Pager({
 }) {
   return (
     <div className="pager">
-      <span>{value.total} records · Page {value.page} of {Math.max(1, value.totalPages)}</span>
+      <span>
+        {value.total} records · Page {value.page} of{" "}
+        {Math.max(1, value.totalPages)}
+      </span>
       <div>
-        <button className="quietButton" disabled={value.page <= 1} onClick={() => onChange(value.page - 1)}>Previous</button>
-        <button className="quietButton" disabled={value.page >= value.totalPages} onClick={() => onChange(value.page + 1)}>Next</button>
+        <button
+          className="quietButton"
+          disabled={value.page <= 1}
+          onClick={() => onChange(value.page - 1)}
+        >
+          Previous
+        </button>
+        <button
+          className="quietButton"
+          disabled={value.page >= value.totalPages}
+          onClick={() => onChange(value.page + 1)}
+        >
+          Next
+        </button>
       </div>
     </div>
   );
 }
 
-function PricingForm({ pricing, busy, onSave }: { pricing: Pricing; busy: boolean; onSave: (value: Pricing) => void }) {
+function PricingForm({
+  pricing,
+  busy,
+  onSave,
+}: {
+  pricing: Pricing;
+  busy: boolean;
+  onSave: (value: PricingSettings) => void;
+}) {
   const [form, setForm] = useState(pricing);
   useEffect(() => setForm(pricing), [pricing]);
-  const fields: { key: keyof Pricing; label: string }[] = [
-    { key: "baseFarePaisa", label: "Base fare" },
-    { key: "perKmFarePaisa", label: "Fare per kilometre" },
-    { key: "perMinuteFarePaisa", label: "Fare per minute" },
-    { key: "minimumFarePaisa", label: "Minimum fare" },
+  const vehicleRates: {
+    title: string;
+    fields: {
+      key: keyof PricingSettings;
+      label: string;
+      kind?: "efficiency";
+    }[];
+  }[] = [
+    {
+      title: "Economy",
+      fields: [
+        { key: "baseFarePaisa", label: "Base fare" },
+        { key: "perKmFarePaisa", label: "Other cost per kilometre" },
+        { key: "perMinuteFarePaisa", label: "Fare per minute" },
+        { key: "minimumFarePaisa", label: "Minimum fare" },
+        {
+          key: "economyFuelEfficiencyKmPerLiter",
+          label: "Fuel efficiency (km/litre)",
+          kind: "efficiency",
+        },
+      ],
+    },
+    {
+      title: "Comfort",
+      fields: [
+        { key: "comfortBaseFarePaisa", label: "Base fare" },
+        { key: "comfortPerKmFarePaisa", label: "Other cost per kilometre" },
+        { key: "comfortPerMinuteFarePaisa", label: "Fare per minute" },
+        { key: "comfortMinimumFarePaisa", label: "Minimum fare" },
+        {
+          key: "comfortFuelEfficiencyKmPerLiter",
+          label: "Fuel efficiency (km/litre)",
+          kind: "efficiency",
+        },
+      ],
+    },
+    {
+      title: "XL",
+      fields: [
+        { key: "xlBaseFarePaisa", label: "Base fare" },
+        { key: "xlPerKmFarePaisa", label: "Other cost per kilometre" },
+        { key: "xlPerMinuteFarePaisa", label: "Fare per minute" },
+        { key: "xlMinimumFarePaisa", label: "Minimum fare" },
+        {
+          key: "xlFuelEfficiencyKmPerLiter",
+          label: "Fuel efficiency (km/litre)",
+          kind: "efficiency",
+        },
+      ],
+    },
+    {
+      title: "Bike",
+      fields: [
+        { key: "bikeBaseFarePaisa", label: "Base fare" },
+        { key: "bikePerKmFarePaisa", label: "Fare per kilometre" },
+        { key: "bikePerMinuteFarePaisa", label: "Fare per minute" },
+        { key: "bikeMinimumFarePaisa", label: "Minimum fare" },
+      ],
+    },
+    {
+      title: "Rickshaw",
+      fields: [
+        { key: "rickshawBaseFarePaisa", label: "Base fare" },
+        { key: "rickshawPerKmFarePaisa", label: "Fare per kilometre" },
+        { key: "rickshawPerMinuteFarePaisa", label: "Fare per minute" },
+        { key: "rickshawMinimumFarePaisa", label: "Minimum fare" },
+      ],
+    },
   ];
-  return <div className="settingsCard"><p className="muted">Values are stored as paisa (100 paisa = PKR 1). Updates apply to new fare estimates only.</p><div className="pricingGrid">{fields.map((field) => <label key={field.key}>{field.label}<div className="moneyInput"><span>PKR</span><input type="number" min="0" step="100" value={(form[field.key] / 100).toString()} onChange={(event) => setForm({ ...form, [field.key]: Math.round(Number(event.target.value) * 100) })} /></div></label>)}</div><button className="primaryButton" disabled={busy} onClick={() => onSave(form)}>{busy ? "Saving…" : "Save fare settings"}</button></div>;
+  return (
+    <div className="settingsCard">
+      <p className="muted">
+        Car classes have independent prices. Car fare = max(minimum, base + km ×
+        (fuel price per litre ÷ fuel efficiency + other cost per km) + minutes ×
+        per-minute fare). Rates are stored in paisa (100 paisa = PKR 1); changes
+        apply to new estimates only. Update fuel price here when it changes.
+        Efficiency defaults are examples; adjust them for your fleet.
+      </p>
+      <label>
+        Current petrol price
+        <div className="moneyInput">
+          <span>PKR / litre</span>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={(form.fuelPricePaisaPerLiter / 100).toString()}
+            onChange={(event) =>
+              setForm({
+                ...form,
+                fuelPricePaisaPerLiter: Math.round(
+                  Number(event.target.value) * 100,
+                ),
+              })
+            }
+          />
+        </div>
+      </label>
+      {form.fuelPricePaisaPerLiter <= 0 ? (
+        <p className="message error">
+          Enter a current petrol price before car fare estimates can be made.
+        </p>
+      ) : null}
+      {vehicleRates.map((vehicle) => (
+        <section className="pricingVehicle" key={vehicle.title}>
+          <h3>{vehicle.title}</h3>
+          <div className="pricingGrid">
+            {vehicle.fields.map((field) => (
+              <label key={field.key}>
+                {field.label}
+                <div className="moneyInput">
+                  <span>PKR</span>
+                  <input
+                    type="number"
+                    min={field.kind === "efficiency" ? "1" : "0"}
+                    step={field.kind === "efficiency" ? "0.1" : "1"}
+                    value={
+                      field.kind === "efficiency"
+                        ? form[field.key].toString()
+                        : (form[field.key] / 100).toString()
+                    }
+                    onChange={(event) =>
+                      setForm({
+                        ...form,
+                        [field.key]:
+                          field.kind === "efficiency"
+                            ? Number(event.target.value)
+                            : Math.round(Number(event.target.value) * 100),
+                      })
+                    }
+                  />
+                </div>
+              </label>
+            ))}
+          </div>
+        </section>
+      ))}
+      <button
+        className="primaryButton"
+        disabled={busy}
+        onClick={() =>
+          onSave({
+            fuelPricePaisaPerLiter: form.fuelPricePaisaPerLiter,
+            economyFuelEfficiencyKmPerLiter:
+              form.economyFuelEfficiencyKmPerLiter,
+            baseFarePaisa: form.baseFarePaisa,
+            perKmFarePaisa: form.perKmFarePaisa,
+            perMinuteFarePaisa: form.perMinuteFarePaisa,
+            minimumFarePaisa: form.minimumFarePaisa,
+            comfortFuelEfficiencyKmPerLiter:
+              form.comfortFuelEfficiencyKmPerLiter,
+            comfortBaseFarePaisa: form.comfortBaseFarePaisa,
+            comfortPerKmFarePaisa: form.comfortPerKmFarePaisa,
+            comfortPerMinuteFarePaisa: form.comfortPerMinuteFarePaisa,
+            comfortMinimumFarePaisa: form.comfortMinimumFarePaisa,
+            xlFuelEfficiencyKmPerLiter: form.xlFuelEfficiencyKmPerLiter,
+            xlBaseFarePaisa: form.xlBaseFarePaisa,
+            xlPerKmFarePaisa: form.xlPerKmFarePaisa,
+            xlPerMinuteFarePaisa: form.xlPerMinuteFarePaisa,
+            xlMinimumFarePaisa: form.xlMinimumFarePaisa,
+            bikeBaseFarePaisa: form.bikeBaseFarePaisa,
+            bikePerKmFarePaisa: form.bikePerKmFarePaisa,
+            bikePerMinuteFarePaisa: form.bikePerMinuteFarePaisa,
+            bikeMinimumFarePaisa: form.bikeMinimumFarePaisa,
+            rickshawBaseFarePaisa: form.rickshawBaseFarePaisa,
+            rickshawPerKmFarePaisa: form.rickshawPerKmFarePaisa,
+            rickshawPerMinuteFarePaisa: form.rickshawPerMinuteFarePaisa,
+            rickshawMinimumFarePaisa: form.rickshawMinimumFarePaisa,
+          })
+        }
+      >
+        {busy ? "Saving…" : "Save fare settings"}
+      </button>
+    </div>
+  );
 }

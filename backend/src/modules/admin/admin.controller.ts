@@ -44,6 +44,17 @@ export class AdminController {
     return this.admin.listUsers(query);
   }
 
+  @Get('users/:userId/rides')
+  @ApiOperation({
+    summary: 'Read paginated ride history and trip statistics for an account',
+  })
+  userRides(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Query() query: AdminListDto,
+  ) {
+    return this.admin.listUserRides(userId, query);
+  }
+
   @Patch('users/:userId/status')
   @ApiOperation({ summary: 'Activate or suspend a non-admin account' })
   setUserStatus(

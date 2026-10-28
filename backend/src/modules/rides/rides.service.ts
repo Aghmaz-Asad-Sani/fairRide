@@ -52,6 +52,7 @@ export interface CreatedRide {
   pickupPin: string;
   fare: ReturnType<PricingService['estimate']>;
   routeSource: string;
+  routeGeometry?: Coordinates[];
   offersCreated: number;
   noDriversAvailable: boolean;
 }
@@ -62,6 +63,7 @@ export class RidesService {
   private readonly matchRadiusMeters: number;
   private readonly matchLimit: number;
   private readonly maxLocationAgeSeconds: number;
+  private readonly maxRideDistanceMeters: number;
   private readonly pinEncryptionKey: Buffer;
 
   constructor(
@@ -81,6 +83,8 @@ export class RidesService {
       'DRIVER_LOCATION_MAX_AGE_SECONDS',
       120,
     );
+    this.maxRideDistanceMeters =
+      config.get<number>('RIDE_MAX_DISTANCE_KM', 1400) * 1000;
     this.pinEncryptionKey = scryptSync(
       config.getOrThrow<string>('JWT_ACCESS_SECRET'),
       'fairride-trip-pin-v1',
@@ -142,12 +146,11 @@ export class RidesService {
       longitude: input.destinationLongitude,
     };
     const route = await this.routing.estimate(pickup, destination);
-    if (route.distanceMeters > 100_000) {
-      throw new BadRequestException('Ride distance exceeds the 100 km limit');
-    }
+    this.assertMaximumRideDistance(route.distanceMeters);
     const fare = await this.pricing.estimateCurrent(
       route,
       input.vehicleCategory,
+      input.vehicleType ?? VehicleType.CAR,
     );
     const pickupPin = randomInt(100000, 1000000).toString();
     const now = new Date();
@@ -237,6 +240,7 @@ export class RidesService {
         pickupPin,
         fare,
         routeSource: route.source,
+        routeGeometry: route.geometry,
         offersCreated: candidates.length,
         noDriversAvailable: candidates.length === 0,
       };
@@ -284,14 +288,25 @@ export class RidesService {
         longitude: input.destinationLongitude,
       },
     );
-    if (route.distanceMeters > 100_000) {
-      throw new BadRequestException('Ride distance exceeds the 100 km limit');
-    }
+    this.assertMaximumRideDistance(route.distanceMeters);
     return {
-      ...(await this.pricing.estimateCurrent(route, input.vehicleCategory)),
+      ...(await this.pricing.estimateCurrent(
+        route,
+        input.vehicleCategory,
+        input.vehicleType ?? VehicleType.CAR,
+      )),
       routeSource: route.source,
+      routeGeometry: route.geometry,
       estimateExpiresInSeconds: 300,
     };
+  }
+
+  private assertMaximumRideDistance(distanceMeters: number): void {
+    if (distanceMeters > this.maxRideDistanceMeters) {
+      throw new BadRequestException(
+        `Ride distance exceeds the ${this.maxRideDistanceMeters / 1000} km limit`,
+      );
+    }
   }
 
   async driverOffers(user: AuthenticatedUser): Promise<unknown[]> {
@@ -441,7 +456,12 @@ export class RidesService {
     if (!passengerView && user.id !== ride.driverId) {
       throw new ForbiddenException('You are not a participant in this ride');
     }
-    return this.rideView(ride, passengerView);
+    return {
+      ...this.rideView(ride, passengerView),
+      ...(passengerView
+        ? { driverLocation: await this.passengerDriverLocation(ride) }
+        : {}),
+    };
   }
 
   async history(
@@ -875,6 +895,7 @@ export class RidesService {
       },
       estimatedDistanceMeters: ride.estimatedDistanceM,
       estimatedDurationSeconds: ride.estimatedDurationS,
+      routeSource: ride.routeSource,
       estimatedFarePaisa: ride.estimatedFarePaisa,
       finalFarePaisa: ride.finalFarePaisa,
       currency: ride.currency,
@@ -897,6 +918,57 @@ export class RidesService {
       cancellationReason: ride.cancellationReason,
       createdAt: ride.createdAt,
     };
+  }
+
+  private async passengerDriverLocation(ride: Ride): Promise<{
+    latitude: number;
+    longitude: number;
+    receivedAt: Date;
+  } | null> {
+    if (
+      !ride.driverId ||
+      ![
+        RideStatus.ACCEPTED,
+        RideStatus.DRIVER_ARRIVING,
+        RideStatus.IN_PROGRESS,
+      ].includes(ride.status)
+    ) {
+      return null;
+    }
+    const rows: unknown = await this.dataSource.query(
+      `SELECT latitude, longitude, last_location_at AS "receivedAt"
+       FROM driver_profiles
+       WHERE user_id = $1 AND latitude IS NOT NULL AND longitude IS NOT NULL
+         AND last_location_at > now() - interval '15 seconds'`,
+      [ride.driverId],
+    );
+    if (!isRecordArray(rows)) {
+      throw new InternalServerErrorException(
+        'Database returned an invalid driver location',
+      );
+    }
+    const location = rows[0];
+    if (!location) return null;
+    const latitude = Number(location.latitude);
+    const longitude = Number(location.longitude);
+    const receivedAt =
+      location.receivedAt instanceof Date
+        ? location.receivedAt
+        : new Date(String(location.receivedAt));
+    if (
+      !Number.isFinite(latitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      !Number.isFinite(longitude) ||
+      longitude < -180 ||
+      longitude > 180 ||
+      !Number.isFinite(receivedAt.getTime())
+    ) {
+      throw new InternalServerErrorException(
+        'Database returned an invalid driver location',
+      );
+    }
+    return { latitude, longitude, receivedAt };
   }
 
   private async getOwnedRide(

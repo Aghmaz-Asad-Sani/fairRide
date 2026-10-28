@@ -1,0 +1,51 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "FairRide Backend",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"--prefix",
+				"backend",
+				"run",
+				"start:dev"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		},
+		{
+			"label": "FairRide Mobile Expo",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"--prefix",
+				"mobile",
+				"start",
+				"--",
+				"--go",
+				"--clear"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		},
+		{
+			"label": "FairRide Admin",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"--prefix",
+				"admin",
+				"run",
+				"dev",
+				"--",
+				"--hostname",
+				"127.0.0.1",
+				"--port",
+				"3001"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		}
+	]
+}

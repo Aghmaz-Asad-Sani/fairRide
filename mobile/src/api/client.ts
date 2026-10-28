@@ -30,6 +30,8 @@ export interface FareEstimate {
   currency: "PKR";
   distanceMeters: number;
   durationSeconds: number;
+  staticDurationSeconds?: number;
+  trafficDelaySeconds?: number;
   baseFarePaisa: number;
   distanceFarePaisa: number;
   timeFarePaisa: number;
@@ -37,7 +39,13 @@ export interface FareEstimate {
   passengerTotalPaisa: number;
   calculationType: "estimate";
   routeSource: string;
+  routeGeometry?: RoutePoint[];
   estimateExpiresInSeconds: number;
+}
+
+export interface RoutePoint {
+  latitude: number;
+  longitude: number;
 }
 
 export interface Ride {
@@ -57,6 +65,8 @@ export interface Ride {
   };
   estimatedDistanceMeters: number;
   estimatedDurationSeconds: number;
+  routeSource?: string;
+  driverLocation?: (RoutePoint & { receivedAt: string }) | null;
   estimatedFarePaisa: number;
   finalFarePaisa: number | null;
   currency: string;
@@ -68,6 +78,7 @@ export interface CreatedRide {
   pickupPin: string;
   fare: FareEstimate;
   routeSource: string;
+  routeGeometry?: RoutePoint[];
   offersCreated: number;
   noDriversAvailable: boolean;
 }

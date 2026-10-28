@@ -60,14 +60,29 @@ import { AdminModule } from './modules/admin/admin.module';
           .min(15)
           .max(300)
           .default(45),
+        RIDE_MAX_DISTANCE_KM: Joi.number()
+          .integer()
+          .min(1)
+          .max(5000)
+          .default(1400),
         FARE_BASE_PAISA: Joi.number().integer().min(0).default(15000),
         FARE_PER_KM_PAISA: Joi.number().integer().min(0).default(3500),
         FARE_PER_MINUTE_PAISA: Joi.number().integer().min(0).default(500),
         FARE_MINIMUM_PAISA: Joi.number().integer().min(0).default(20000),
+        FUEL_PRICE_PAISA_PER_LITER: Joi.number().integer().min(0).default(0),
+        FARE_BIKE_BASE_PAISA: Joi.number().integer().min(0),
+        FARE_BIKE_PER_KM_PAISA: Joi.number().integer().min(0),
+        FARE_BIKE_PER_MINUTE_PAISA: Joi.number().integer().min(0),
+        FARE_BIKE_MINIMUM_PAISA: Joi.number().integer().min(0),
+        FARE_RICKSHAW_BASE_PAISA: Joi.number().integer().min(0),
+        FARE_RICKSHAW_PER_KM_PAISA: Joi.number().integer().min(0),
+        FARE_RICKSHAW_PER_MINUTE_PAISA: Joi.number().integer().min(0),
+        FARE_RICKSHAW_MINIMUM_PAISA: Joi.number().integer().min(0),
         ROUTING_PROVIDER: Joi.string()
-          .valid('development', 'osrm')
+          .valid('development', 'osrm', 'google_maps')
           .default('development'),
         ROUTING_BASE_URL: Joi.string().uri().allow(''),
+        GOOGLE_ROUTES_API_KEY: Joi.string().allow('').default(''),
         OTP_DEV_RETURN_CODE: Joi.boolean().default(false),
         OTP_CODE_TTL_SECONDS: Joi.number()
           .integer()
@@ -85,7 +100,12 @@ import { AdminModule } from './modules/admin/admin.module';
         const settings = value as Record<string, unknown>;
         if (
           settings.NODE_ENV === 'production' &&
-          (settings.ROUTING_PROVIDER !== 'osrm' || !settings.ROUTING_BASE_URL)
+          !(
+            (settings.ROUTING_PROVIDER === 'osrm' &&
+              settings.ROUTING_BASE_URL) ||
+            (settings.ROUTING_PROVIDER === 'google_maps' &&
+              settings.GOOGLE_ROUTES_API_KEY)
+          )
         ) {
           return helpers.error('any.invalid');
         }
